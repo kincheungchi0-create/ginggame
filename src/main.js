@@ -346,31 +346,6 @@ class RacingGame {
     }
 
     createDecals() {
-        // Ground Decal (Bottom Intersection)
-        const groundDecalGeo = new THREE.PlaneGeometry(20, 20); // 縮小一點適應路寬
-        const groundDecalMat = new THREE.MeshLambertMaterial({
-            map: this.brandingTextures.decal,
-            transparent: true,
-            opacity: 0.9,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -4,
-            side: THREE.DoubleSide
-        });
-
-        const groundDecal = new THREE.Mesh(groundDecalGeo, groundDecalMat);
-        groundDecal.rotation.x = -Math.PI / 2;
-        groundDecal.position.set(0, 0.2, 0);
-        this.scene.add(groundDecal);
-
-        // Bridge Decal (Top Intersection)
-        const bridgeDecal = groundDecal.clone();
-        // 橋最高點約 30 (based on new height scale 15 -> range 0-30)
-        // y = (sin(t)+1)*15. Max = 30.
-        // Intersection likely at y=15 if formula logic holds for t=PI/2
-        bridgeDecal.position.set(0, 30.2, 0);
-        this.scene.add(bridgeDecal);
-
         // Apex Billboards
         this.createApexBillboardAt(0);
         this.createApexBillboardAt(Math.PI);
