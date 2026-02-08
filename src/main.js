@@ -1,5 +1,86 @@
 import * as THREE from 'three';
 
+// ==================== 音效管理器 ====================
+class SoundManager {
+    constructor() {
+        this.context = null;
+        this.masterGain = null;
+        this.engineOsc = null;
+        this.engineGain = null;
+        this.initialized = false;
+        this.started = false;
+    }
+
+    init() {
+        if (this.initialized) return;
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.context = new AudioContext();
+
+        this.masterGain = this.context.createGain();
+        this.masterGain.gain.value = 0.5;
+        this.masterGain.connect(this.context.destination);
+
+        this.initialized = true;
+    }
+
+    startEngine() {
+        if (!this.initialized) this.init();
+        if (this.started) return;
+
+        // Engine Oscillator (Sawtooth for rough engine sound)
+        this.engineOsc = this.context.createOscillator();
+        this.engineOsc.type = 'sawtooth';
+        this.engineOsc.frequency.value = 100; // Idle RPM
+
+        // Engine Filter (Lowpass to muffle the harsh sawtooth)
+        this.engineFilter = this.context.createBiquadFilter();
+        this.engineFilter.type = 'lowpass';
+        this.engineFilter.frequency.value = 400;
+
+        // Engine Gain
+        this.engineGain = this.context.createGain();
+        this.engineGain.gain.value = 0.1;
+
+        // Connections
+        this.engineOsc.connect(this.engineFilter);
+        this.engineFilter.connect(this.engineGain);
+        this.engineGain.connect(this.masterGain);
+
+        this.engineOsc.start();
+        this.started = true;
+    }
+
+    updateEngine(speed, maxSpeed) {
+        if (!this.started) return;
+
+        const speedRatio = Math.abs(speed) / maxSpeed;
+
+        // Pitch modulation
+        // Idle: 80Hz, Max Redline: 400Hz
+        const targetFreq = 80 + (speedRatio * 320);
+        this.engineOsc.frequency.setTargetAtTime(targetFreq, this.context.currentTime, 0.1);
+
+        // Filter modulation (opens up as you speed up)
+        const targetFilter = 400 + (speedRatio * 1000);
+        this.engineFilter.frequency.setTargetAtTime(targetFilter, this.context.currentTime, 0.1);
+
+        // Volume wobble (tremolo) based on speed for realism? 
+        // Or just volume increase
+        // Let's add a slight random flutter or just keep it simple.
+        this.engineGain.gain.setTargetAtTime(0.1 + (speedRatio * 0.2), this.context.currentTime, 0.1);
+    }
+
+    stopEngine() {
+        if (this.engineOsc) {
+            this.engineOsc.stop();
+            this.engineOsc.disconnect();
+            this.engineOsc = null;
+        }
+        this.started = false;
+    }
+}
+
 /**
  * 🏎️ HYPERION RACING - Clean 3D Racing Game
  * A simple, visually clean racing game with Three.js
@@ -1632,83 +1713,4 @@ if (document.readyState === 'loading') {
     new RacingGame();
 }
 
-// ==================== 音效管理器 ====================
-class SoundManager {
-    constructor() {
-        this.context = null;
-        this.masterGain = null;
-        this.engineOsc = null;
-        this.engineGain = null;
-        this.initialized = false;
-        this.started = false;
-    }
 
-    init() {
-        if (this.initialized) return;
-
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        this.context = new AudioContext();
-
-        this.masterGain = this.context.createGain();
-        this.masterGain.gain.value = 0.5;
-        this.masterGain.connect(this.context.destination);
-
-        this.initialized = true;
-    }
-
-    startEngine() {
-        if (!this.initialized) this.init();
-        if (this.started) return;
-
-        // Engine Oscillator (Sawtooth for rough engine sound)
-        this.engineOsc = this.context.createOscillator();
-        this.engineOsc.type = 'sawtooth';
-        this.engineOsc.frequency.value = 100; // Idle RPM
-
-        // Engine Filter (Lowpass to muffle the harsh sawtooth)
-        this.engineFilter = this.context.createBiquadFilter();
-        this.engineFilter.type = 'lowpass';
-        this.engineFilter.frequency.value = 400;
-
-        // Engine Gain
-        this.engineGain = this.context.createGain();
-        this.engineGain.gain.value = 0.1;
-
-        // Connections
-        this.engineOsc.connect(this.engineFilter);
-        this.engineFilter.connect(this.engineGain);
-        this.engineGain.connect(this.masterGain);
-
-        this.engineOsc.start();
-        this.started = true;
-    }
-
-    updateEngine(speed, maxSpeed) {
-        if (!this.started) return;
-
-        const speedRatio = Math.abs(speed) / maxSpeed;
-
-        // Pitch modulation
-        // Idle: 80Hz, Max Redline: 400Hz
-        const targetFreq = 80 + (speedRatio * 320);
-        this.engineOsc.frequency.setTargetAtTime(targetFreq, this.context.currentTime, 0.1);
-
-        // Filter modulation (opens up as you speed up)
-        const targetFilter = 400 + (speedRatio * 1000);
-        this.engineFilter.frequency.setTargetAtTime(targetFilter, this.context.currentTime, 0.1);
-
-        // Volume wobble (tremolo) based on speed for realism? 
-        // Or just volume increase
-        // Let's add a slight random flutter or just keep it simple.
-        this.engineGain.gain.setTargetAtTime(0.1 + (speedRatio * 0.2), this.context.currentTime, 0.1);
-    }
-
-    stopEngine() {
-        if (this.engineOsc) {
-            this.engineOsc.stop();
-            this.engineOsc.disconnect();
-            this.engineOsc = null;
-        }
-        this.started = false;
-    }
-}
