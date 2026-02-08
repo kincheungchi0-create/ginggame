@@ -252,7 +252,23 @@ class RacingGame {
         const t6 = loader.load('/6.jpeg');
         const t7 = loader.load('/7.jpeg');
 
-        [t1, t2, t4, gtja, t5, t6, t7].forEach(t => t.anisotropy = 16);
+        const extraBanners = [];
+        // Load banners 8-25
+        for (let i = 8; i <= 25; i++) {
+            // Some might be jpg or jpeg, but we renamed them to jpeg or jpg?
+            // Actually I renamed them to .jpeg in the mv command.
+            // But wait, the user's files originally had various extensions. 
+            // My mv command: mv ... public/8.jpeg
+            // Yes, I renamed them all to .jpeg for consistency.
+            const tex = loader.load(`/${i}.jpeg`);
+            tex.anisotropy = 16;
+            extraBanners.push(tex);
+        }
+
+        const baseBanners = [t1, t2, t4, gtja, t5, t6, t7];
+        baseBanners.forEach(t => t.anisotropy = 16);
+
+        const allBanners = [...baseBanners, ...extraBanners];
 
         return {
             main: texture,
@@ -264,7 +280,7 @@ class RacingGame {
             banner5: t5,
             banner6: t6,
             banner7: t7,
-            allBanners: [t1, t2, t4, gtja, t5, t6, t7]
+            allBanners: allBanners
         };
     }
 
@@ -390,6 +406,7 @@ class RacingGame {
 
         // 4. 裝飾
         this.createTrackDecorations();
+        this.createSkyBanners(); // Add sky banners
 
         // 5. 起點
         this.createStartLine();
@@ -789,6 +806,53 @@ class RacingGame {
     createStartArch() { }
     addSponsorLogo() { }
     createSponsorBillboards(tex) { }
+
+    // ==================== 天空懸浮廣告 ====================
+    createSkyBanners() {
+        if (!this.trackCurve) return;
+
+        const count = 12; // Number of floating banners
+        const height = 60; // Height in the sky
+        const radius = this.trackRadius + 40; // Wider than track
+
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+
+            // Texture
+            const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
+
+            // Mesh
+            // Large 16:9 aspect ratio
+            const geo = new THREE.PlaneGeometry(64, 36);
+            const mat = new THREE.MeshBasicMaterial({
+                map: tex,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+
+            mesh.position.set(x, height, z);
+
+            // Look at center (0, height, 0)
+            mesh.lookAt(0, height, 0);
+
+            // Add some gentle floating animation container if desired, but static is fine for now
+            // Or maybe a slight tilt
+            mesh.rotation.x = 0.1; // Tilt down slightly
+
+            this.scene.add(mesh);
+
+            // Optional: Support wires (visuals)
+            const wireGeo = new THREE.CylinderGeometry(0.1, 0.1, height);
+            const wireMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
+            const wire = new THREE.Mesh(wireGeo, wireMat);
+            wire.position.set(x, height / 2, z);
+            // this.scene.add(wire); // Maybe looks cleaner without wires, like floating holograms
+        }
+    }
 
     // ==================== 創建車輛 ====================
     createCar() {
