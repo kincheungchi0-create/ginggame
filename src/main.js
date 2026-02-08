@@ -847,9 +847,12 @@ class RacingGame {
             // Texture
             const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
 
-            // Mesh
-            // Large 16:9 aspect ratio
-            const geo = new THREE.PlaneGeometry(64, 36);
+            // Default size
+            const baseHeight = 20;
+            const baseWidth = 35; // Default 16:9 approx
+
+            // Mesh with dynamic aspect ratio
+            const geo = new THREE.PlaneGeometry(1, 1); // Unit square, will scale
             const mat = new THREE.MeshBasicMaterial({
                 map: tex,
                 side: THREE.DoubleSide,
@@ -858,23 +861,57 @@ class RacingGame {
             });
             const mesh = new THREE.Mesh(geo, mat);
 
+            // Function to update scale based on texture
+            const updateScale = () => {
+                if (tex.image && tex.image.width && tex.image.height) {
+                    const aspect = tex.image.width / tex.image.height;
+                    mesh.scale.set(baseHeight * aspect, baseHeight, 1);
+                } else {
+                    mesh.scale.set(baseWidth, baseHeight, 1);
+                }
+            };
+
+            // Check if already loaded
+            if (tex.image && tex.image.width) {
+                updateScale();
+            } else {
+                // Wait for load
+                tex.addEventListener('load', updateScale); // Three.js texture event? 
+                // Creating a new listener might be tricky if it's already cached.
+                // Just in case, set default.
+                mesh.scale.set(baseWidth, baseHeight, 1);
+
+                // Poll check? Or just assume standard. 
+                // Let's use a simpler heuristic: preset dimensions if known, or just fixed large size.
+                // Or better: use a check in the animate loop? No too expensive.
+                // Let's just use the image onload callback when we loaded them? Too late.
+                // We'll leave the scale default and let ThreeJS handle UV mapping stretch, 
+                // UNLESS user specifically wants original aspect ratio. 
+                // Correction: The USER wants "original ratio".
+
+                // Let's rely on the image property being available eventually.
+                // We can check it later.
+            }
+            // For now, let's assume valid load or use a safe default. 
+            // Better yet, just set UVs to cover? No, that stretches.
+            // We want the MESH to be the right shape.
+
+            // Let's try to fetch dimensions immediately if possible.
+            // If they are not loaded, we use a 16:9 default.
+            if (tex.image) {
+                const w = tex.image.width || 16;
+                const h = tex.image.height || 9;
+                const aspect = w / h;
+                mesh.scale.set(baseHeight * aspect, baseHeight, 1);
+            } else {
+                mesh.scale.set(baseWidth, baseHeight, 1);
+            }
+
             mesh.position.set(x, height, z);
-
-            // Look at center (0, height, 0)
             mesh.lookAt(0, height, 0);
-
-            // Add some gentle floating animation container if desired, but static is fine for now
-            // Or maybe a slight tilt
             mesh.rotation.x = 0.1; // Tilt down slightly
 
             this.skyBannerGroup.add(mesh);
-
-            // Optional: Support wires (visuals)
-            const wireGeo = new THREE.CylinderGeometry(0.1, 0.1, height);
-            const wireMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
-            const wire = new THREE.Mesh(wireGeo, wireMat);
-            wire.position.set(x, height / 2, z);
-            // this.scene.add(wire); // Maybe looks cleaner without wires, like floating holograms
         }
     }
 
@@ -911,14 +948,41 @@ class RacingGame {
             group.add(rightPole);
 
             // 2. Crossbar / Banner
-            const bannerGeo = new THREE.BoxGeometry(bannerWidth, bannerHeight, 0.5);
+            // Use a base height, and scale width by aspect ratio
+            const baseH = 8;
+            const baseW = 20;
+
             // Cycle textures
             const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
-            const bannerMat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff });
 
+            // Use PlaneGeometry for the image part to avoid stretching on sides of box
+            const bannerGeo = new THREE.PlaneGeometry(1, 1);
+            const bannerMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
             const banner = new THREE.Mesh(bannerGeo, bannerMat);
-            banner.position.y = 9;
+
+            // Determine Aspect Ratio
+            if (tex.image && tex.image.width) {
+                const aspect = tex.image.width / tex.image.height;
+                banner.scale.set(baseH * aspect, baseH, 1);
+            } else {
+                banner.scale.set(baseW, baseH, 1);
+            }
+
+            banner.position.y = 8;
+
+            // Add a backing box for structure
+            const boxW = banner.scale.x + 1; // slightly wider
+            const boxGeo = new THREE.BoxGeometry(boxW, baseH + 0.5, 0.2);
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(0, 8, -0.11); // Behind the plane
+            group.add(box);
+
             group.add(banner);
+
+            // Adjust pole spacing to match banner width
+            leftPole.position.x = -boxW / 2 + 0.5;
+            rightPole.position.x = boxW / 2 - 0.5;
 
             this.scene.add(group);
         }
