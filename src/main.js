@@ -407,6 +407,7 @@ class RacingGame {
         // 4. 裝飾
         this.createTrackDecorations();
         this.createSkyBanners(); // Add sky banners
+        this.createOverheadBanners(); // Add overhead banners across the track
 
         // 5. 起點
         this.createStartLine();
@@ -653,36 +654,55 @@ class RacingGame {
     }
 
     // ==================== 賽道地面貼圖 (Decals) ====================
+    // ==================== 賽道地面貼圖 (Decals) ====================
     createRoadDecals() {
-        const count = 12;
-        const decalGeo = new THREE.PlaneGeometry(10, 4);
+        if (!this.trackCurve) return;
+
+        const count = 60; // Increased density significantly
+        const decalGeo = new THREE.PlaneGeometry(12, 6); // Slightly larger
+
+        // Randomize order or just cycle
+        const banners = this.brandingTextures.allBanners;
 
         for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2 + (Math.PI / count); // 錯開位置
-            // Cycle all banners for ground decals
-            const texture = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
+            // Distribute along the curve
+            const t = (i / count);
+            const point = this.trackCurve.getPointAt(t);
+            const tangent = this.trackCurve.getTangentAt(t);
+
+            const tex = banners[i % banners.length];
 
             const mat = new THREE.MeshLambertMaterial({
-                map: texture,
+                map: tex,
                 transparent: true,
-                opacity: 0.8,
+                opacity: 0.9,
                 depthWrite: false,
                 polygonOffset: true,
-                polygonOffsetFactor: -2
+                polygonOffsetFactor: -2,
+                side: THREE.DoubleSide // Visible from both sides (though it's on ground)
             });
 
             const decal = new THREE.Mesh(decalGeo, mat);
 
-            // 放在路面上
-            decal.position.set(
-                Math.cos(angle) * this.trackRadius,
-                0.03, // 稍微高出路面
-                Math.sin(angle) * this.trackRadius
-            );
+            // Position slightly above ground
+            decal.position.copy(point);
+            decal.position.y += 0.05;
 
-            // 旋轉以貼合路面並面向正確方向
-            decal.rotation.x = -Math.PI / 2; // 平躺
-            decal.rotation.z = -angle + Math.PI / 2; // 跟隨賽道方向 (文字橫向跨越賽道)
+            // Orient flat on ground
+            decal.rotation.x = -Math.PI / 2;
+
+            // Rotate to align with track direction?
+            // Tangent is direction vector.
+            // ATom: If lay flat (RotX -90), the local Y is World Z (or something). 
+            // Proper way: LookAt next point, then Rotate X -90.
+            const nextPoint = this.trackCurve.getPointAt((t + 0.01) % 1);
+            // decal.lookAt(nextPoint.x, decal.position.y, nextPoint.z); // Face forward in Y? No.
+
+            // Manual rotation calc
+            const angle = Math.atan2(tangent.x, tangent.z);
+            decal.rotation.z = angle + Math.PI / 2; // Rotate 90 deg to span across the road? Or 0 to lie along?
+            // User probably wants them to be readable as you drive over? 
+            // Usually logos span across the road width (perpendicular to travel).
 
             this.scene.add(decal);
         }
@@ -808,8 +828,12 @@ class RacingGame {
     createSponsorBillboards(tex) { }
 
     // ==================== 天空懸浮廣告 ====================
+    // ==================== 天空懸浮廣告 ====================
     createSkyBanners() {
         if (!this.trackCurve) return;
+
+        this.skyBannerGroup = new THREE.Group();
+        this.scene.add(this.skyBannerGroup);
 
         const count = 12; // Number of floating banners
         const height = 60; // Height in the sky
@@ -843,7 +867,7 @@ class RacingGame {
             // Or maybe a slight tilt
             mesh.rotation.x = 0.1; // Tilt down slightly
 
-            this.scene.add(mesh);
+            this.skyBannerGroup.add(mesh);
 
             // Optional: Support wires (visuals)
             const wireGeo = new THREE.CylinderGeometry(0.1, 0.1, height);
@@ -851,6 +875,52 @@ class RacingGame {
             const wire = new THREE.Mesh(wireGeo, wireMat);
             wire.position.set(x, height / 2, z);
             // this.scene.add(wire); // Maybe looks cleaner without wires, like floating holograms
+        }
+    }
+
+    // ==================== 賽道上方橫幅 ====================
+    createOverheadBanners() {
+        if (!this.trackCurve) return;
+
+        const bannerCount = 10;
+        const bannerWidth = 30;
+        const bannerHeight = 5;
+
+        for (let i = 0; i < bannerCount; i++) {
+            // Position along the curve (skip 0/1 to avoid start line clash if needed, but start line is at 0)
+            // Let's offset them a bit: 0.05, 0.15, ...
+            const t = (i / bannerCount + 0.05) % 1;
+
+            const point = this.trackCurve.getPointAt(t);
+            const tangent = this.trackCurve.getTangentAt(t);
+
+            const group = new THREE.Group();
+            group.position.copy(point);
+            group.lookAt(point.clone().add(tangent));
+
+            // 1. Pillars (Left/Right)
+            const poleGeo = new THREE.CylinderGeometry(0.3, 0.3, 12);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+
+            const leftPole = new THREE.Mesh(poleGeo, poleMat);
+            leftPole.position.set(-bannerWidth / 2, 6, 0);
+            group.add(leftPole);
+
+            const rightPole = new THREE.Mesh(poleGeo, poleMat);
+            rightPole.position.set(bannerWidth / 2, 6, 0);
+            group.add(rightPole);
+
+            // 2. Crossbar / Banner
+            const bannerGeo = new THREE.BoxGeometry(bannerWidth, bannerHeight, 0.5);
+            // Cycle textures
+            const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
+            const bannerMat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff });
+
+            const banner = new THREE.Mesh(bannerGeo, bannerMat);
+            banner.position.y = 9;
+            group.add(banner);
+
+            this.scene.add(group);
         }
     }
 
@@ -1763,6 +1833,11 @@ class RacingGame {
         if (!this.paused) {
             this.updateCar(dt);
             this.updateCamera();
+
+            // Rotate sky banners
+            if (this.skyBannerGroup) {
+                this.skyBannerGroup.rotation.y += dt * 0.05; // Slow rotation
+            }
         }
 
         this.updateHUD();
