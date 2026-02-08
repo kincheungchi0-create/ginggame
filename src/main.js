@@ -258,6 +258,8 @@ class RacingGame {
         // computeVertexNormals might smooth edges too much for a road, but manual normals (0,1,0) are safer for flat shading logic
         // Let's actually recalculate them to be safe for lighting
         trackGeometry.computeVertexNormals();
+        trackGeometry.computeBoundingBox();
+        trackGeometry.computeBoundingSphere();
 
         const trackMaterial = new THREE.MeshStandardMaterial({
             color: 0x222222, // Dark asphalt
@@ -268,7 +270,12 @@ class RacingGame {
 
         this.trackMesh = new THREE.Mesh(trackGeometry, trackMaterial);
         this.trackMesh.receiveShadow = true;
+        this.trackMesh.name = "TrackMesh"; // Helper for debug
         this.scene.add(this.trackMesh);
+
+        // Track Physics Data
+        this.trackLength = this.trackCurve.getLength();
+        this.carT = 0; // Car's position parameter on curve (0 to 1)
 
         // 3. 獲取 Raycast 用的 Mesh
         this.collidableMeshes = [this.trackMesh];
@@ -1331,96 +1338,151 @@ class RacingGame {
             }
         }
 
-        // 更新車輛位置
-        // 車輛模型前方是 +Z，當 rotation.y = 0 時面向 +Z
-        // rotation.y 增加時車輛左轉（面向角度增加的方向）
+        // Update Car Position Physics
+        this.updateCarPhysics(dt);
+    }
+
+    updateCarPhysics(dt) {
+        // 1. Move Car in X/Z based on speed/angle
         const moveX = Math.sin(this.carAngle) * this.carSpeed * dt;
         const moveZ = Math.cos(this.carAngle) * this.carSpeed * dt;
 
-        this.car.position.x += moveX;
-        this.car.position.z += moveZ;
+        // Candidate position
+        const nextPos = this.car.position.clone();
+        nextPos.x += moveX;
+        nextPos.z += moveZ;
+
+        // 2. Track Constraint (Keep on track)
+        // Find the closest point on curve near current carT
+        // We assume the car moves forward/backward along the track mostly
+        // Optimize: scan small window around carT
+        if (this.trackCurve && this.trackLength > 0) {
+            const range = 0.05; // Search range (5% of track)
+            let bestT = this.carT;
+            let minDistSq = Infinity;
+            const samples = 20;
+
+            // Search direction based on speed to optimize
+            const dir = this.carSpeed >= 0 ? 1 : -1;
+            const startT = this.carT - (dir < 0 ? range : range * 0.2);
+
+            for (let i = 0; i <= samples; i++) {
+                let t = startT + (i / samples) * range;
+                // Wrap t
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+
+                const pt = this.trackCurve.getPointAt(t);
+                // Compare only XZ distance (ignore Y for finding path projection)
+                const dx = nextPos.x - pt.x;
+                const dz = nextPos.z - pt.z;
+                const dSq = dx * dx + dz * dz;
+
+                if (dSq < minDistSq) {
+                    minDistSq = dSq;
+                    bestT = t;
+                }
+            }
+            this.carT = bestT;
+
+            const curvePt = this.trackCurve.getPointAt(this.carT);
+
+            // Constrain width
+            const limit = this.trackWidth / 2 - 2; // Margin for car size
+            const distFromCurve = Math.sqrt(minDistSq); // XZ distance
+
+            if (distFromCurve > limit) {
+                // Determine direction from curve to car (XZ only)
+                const dx = nextPos.x - curvePt.x;
+                const dz = nextPos.z - curvePt.z;
+                const angle = Math.atan2(dz, dx); // Angle from curve center to car
+
+                // Clamp position
+                nextPos.x = curvePt.x + Math.cos(angle) * limit;
+                nextPos.z = curvePt.z + Math.sin(angle) * limit;
+
+                // Reduce speed slightly on wall hit
+                this.carSpeed *= 0.95;
+            }
+
+            // Apply XZ update
+            this.car.position.x = nextPos.x;
+            this.car.position.z = nextPos.z;
+
+            // 3. Update Y Position (Raycast + Fallback)
+            this.updateCarHeight(curvePt);
+        }
+
+        // 4. Update Rotation
         this.car.rotation.y = this.carAngle;
 
-        // 車輪旋轉
+        // Wheels
         const wheelRotation = this.carSpeed * dt * 0.5;
         this.wheels.forEach(wheel => {
             wheel.rotation.x += wheelRotation;
         });
-
-        // 保持車輛在賽道上（簡單邊界檢測）
-        this.keepCarOnTrack();
     }
 
-    // ==================== 保持車輛在賽道上 ====================
-    keepCarOnTrack() {
-        const distFromCenter = Math.sqrt(
-            this.car.position.x ** 2 + this.car.position.z ** 2
-        );
-
-        // 2. Raycast to find ground (Handling elevation)
-        // Ray origin should be high enough above max height (24)
+    updateCarHeight(curvePt) {
         this.raycaster = this.raycaster || new THREE.Raycaster();
 
+        // Raycast down from high up
         const rayOrigin = this.car.position.clone();
-        rayOrigin.y = 50; // High above
-
+        rayOrigin.y = 50;
         this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
         const hits = this.raycaster.intersectObject(this.trackMesh);
 
         if (hits.length > 0) {
             const hit = hits[0];
-            const targetY = hit.point.y + 0.5; // Axle height
+            const targetY = hit.point.y + 0.5;
+            this.car.position.y += (targetY - this.car.position.y) * 0.3;
 
-            // Smooth Y update
-            this.car.position.y += (targetY - this.car.position.y) * 0.2;
-
-            // Align car with ground normal
+            // Align to normal
             const n = hit.face.normal.clone();
-            // Since the generated mesh might have local transforms, we should be careful.
-            // But here trackMesh is at (0,0,0) with no rotation. So Face Normal is World Normal.
-
-            // We want the car's UP vector to match N, while keeping forward direction roughly same
-            // Use dummy object to calculate
             const targetRot = new THREE.Object3D();
             targetRot.position.copy(this.car.position);
-
-            // Look target: Current position + Forward vector projected on plane
-            // forward vector based on carAngle
             const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
-
-            // Project fwd onto plane defined by normal n
-            // v_proj = v - (v . n) * n
             const fwdProj = fwd.clone().sub(n.clone().multiplyScalar(fwd.dot(n))).normalize();
-
             targetRot.up.copy(n);
             targetRot.lookAt(targetRot.position.clone().add(fwdProj));
-
-            // Smoothly interpolate rotation (Quaternion slerp)
             this.car.quaternion.slerp(targetRot.quaternion, 0.2);
-
         } else {
-            // Off track!
-            // Apply simple gravity
-            this.car.position.y -= 0.5;
-            if (this.car.position.y < -10) {
-                // Reset
-                this.resetCar();
-            }
+            // Raycast missed (should not happen with constraint, but robust fallback)
+            // Use curve height + offset
+            const targetY = curvePt.y + 0.5;
+            this.car.position.y += (targetY - this.car.position.y) * 0.1;
+
+            // Reset rotation to flat if flying
+            const targetRot = new THREE.Object3D();
+            targetRot.position.copy(this.car.position);
+            const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
+            targetRot.lookAt(targetRot.position.clone().add(fwd));
+            this.car.quaternion.slerp(targetRot.quaternion, 0.1);
         }
     }
 
+    // Deprecated
+    keepCarOnTrack() { }
+
     resetCar() {
         this.carSpeed = 0;
-        if (this.trackLayout && this.trackLayout.length > 0) {
-            const layout = this.trackLayout[0];
-            this.car.position.copy(layout.position);
+        this.carT = 0; // Reset track progress
+
+        if (this.trackCurve) {
+            const pt = this.trackCurve.getPointAt(0);
+            const tangent = this.trackCurve.getTangentAt(0);
+
+            this.car.position.copy(pt);
             this.car.position.y += 2;
-            const t = layout.tangent;
-            this.car.lookAt(layout.position.clone().add(t));
-            this.carAngle = Math.atan2(t.x, t.z);
+            this.car.lookAt(pt.clone().add(tangent));
+            this.carAngle = Math.atan2(tangent.x, tangent.z);
+
+            // Reset Physics
+            this.car.rotation.x = 0;
+            this.car.rotation.z = 0;
         } else {
-            this.car.position.set(0, 10, 0);
+            this.car.position.set(0, 5, 0);
         }
     }
 
