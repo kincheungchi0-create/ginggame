@@ -133,8 +133,8 @@ class RacingGame {
         // ==================== 車輛狀態 ====================
         this.carSpeed = 0;
         this.carAngle = 0;
-        this.maxSpeed = 80; // Slower speed
-        this.acceleration = 40; // Slower acceleration
+        this.maxSpeed = 50; // Very slow speed for easy control
+        this.acceleration = 25; // Gentle acceleration
         this.handling = 2.5;
 
         // ==================== 輸入狀態 ====================
@@ -1055,9 +1055,9 @@ class RacingGame {
     // ==================== 樹林區域廣告牌 ====================
     createTreeBanners() {
         // Scatter banners randomly in the environment, similar to trees
-        const count = 40;
-        const width = 400;
-        const depth = 400;
+        const count = 150; // Increased count
+        const width = 500; // Expanded area
+        const depth = 500;
 
         for (let i = 0; i < count; i++) {
             const x = (Math.random() - 0.5) * width;
@@ -1066,7 +1066,7 @@ class RacingGame {
             // Simple distance check from center (track area)
             // Track radius is 80.
             const dist = Math.sqrt(x * x + z * z);
-            if (dist < 100) continue;
+            if (dist < 90) continue; // Allow slightly closer to track edge
 
             const group = new THREE.Group();
             group.position.set(x, 0, z);
