@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HYPERION RACING - 極速競賽</title>
+  <meta name="description" content="A clean and exciting 3D racing game built with Three.js">
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    .game-title,
+    #speed-value,
+    #lap-value,
+    #time-value {
+      font-family: 'Orbitron', sans-serif;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 選單畫面 -->
+  <div id="menu">
+    <h1 class="game-title">HYPERION</h1>
+    <p class="game-subtitle">RACING</p>
+    <button id="start-btn">🏁 開始競賽</button>
+    <div class="controls-info">
+      <p><strong>W / ↑</strong> - 加速</p>
+      <p><strong>S / ↓</strong> - 煞車/倒車</p>
+      <p><strong>A / ←</strong> - 左轉</p>
+      <p><strong>D / →</strong> - 右轉</p>
+      <p><strong>ESC</strong> - 暫停</p>
+    </div>
+  </div>
+
+  <!-- 遊戲腳本 -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
