@@ -133,8 +133,8 @@ class RacingGame {
         // ==================== 車輛狀態 ====================
         this.carSpeed = 0;
         this.carAngle = 0;
-        this.maxSpeed = 120;
-        this.acceleration = 80;
+        this.maxSpeed = 80; // Slower speed
+        this.acceleration = 40; // Slower acceleration
         this.handling = 2.5;
 
         // ==================== 輸入狀態 ====================
