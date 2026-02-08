@@ -102,6 +102,51 @@ canvas {
     color: #00ff88;
 }
 
+/* ==================== 贊助商資訊 ==================== */
+.sponsor-info {
+    margin-top: 40px;
+    text-align: center;
+}
+
+.sponsor-info p {
+    color: #6666aa;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.sponsor-link {
+    display: inline-block;
+    padding: 12px 30px;
+    background: linear-gradient(135deg, #e31e26 0%, #b71c1c 100%);
+    color: white;
+    text-decoration: none;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(227, 30, 38, 0.4);
+}
+
+.sponsor-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(227, 30, 38, 0.6);
+}
+
+/* ==================== 開發者資訊 ==================== */
+.developer-info {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.developer-info p {
+    color: #555588;
+    font-size: 14px;
+}
+
+.developer-info strong {
+    color: #00ccff;
+}
+
 /* ==================== 遊戲 HUD ==================== */
 #game-hud {
     position: fixed;

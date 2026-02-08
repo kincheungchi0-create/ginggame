@@ -321,39 +321,53 @@ class RacingGame {
 
     // ==================== 添加贊助商 Logo ====================
     addSponsorLogo() {
-        const textureLoader = new THREE.TextureLoader();
+        // 使用 Canvas 創建 CMBI Logo
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
 
-        // 載入 CLSA logo
-        textureLoader.load('/clsa-logo.png', (texture) => {
-            // 拱門上的 logo
-            const logoMaterial = new THREE.MeshBasicMaterial({
-                map: texture,
-                transparent: true,
-                side: THREE.DoubleSide
-            });
+        // 背景
+        ctx.fillStyle = '#e31e26';  // 招商銀行紅色
+        ctx.fillRect(0, 0, 512, 128);
 
-            // 計算合適的尺寸 (保持比例)
-            const logoWidth = 12;
-            const logoHeight = 3;
+        // CMBI 文字
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 60px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('招銀國際 CMBI', 256, 64);
 
-            // 拱門橫樑 logo - 橫樑沿著 X 軸，所以 logo 應該在 Z 方向的前後
-            const logoGeo = new THREE.PlaneGeometry(logoWidth, logoHeight);
+        const texture = new THREE.CanvasTexture(canvas);
 
-            // 前側 logo（面向車輛來的方向，-Z）
-            const logoFront = new THREE.Mesh(logoGeo, logoMaterial);
-            logoFront.position.set(this.trackRadius, 8, -0.6);
-            logoFront.rotation.y = Math.PI;  // 面向 -Z 方向
-            this.scene.add(logoFront);
-
-            // 後側 logo（面向車輛去的方向，+Z）
-            const logoBack = new THREE.Mesh(logoGeo, logoMaterial);
-            logoBack.position.set(this.trackRadius, 8, 0.6);
-            // 不旋轉，預設面向 +Z 方向
-            this.scene.add(logoBack);
-
-            // 在賽道周圍放置贊助商廣告牌
-            this.createSponsorBillboards(texture);
+        // 拱門上的 logo
+        const logoMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: false,
+            side: THREE.DoubleSide
         });
+
+        // 計算合適的尺寸 (保持比例)
+        const logoWidth = 14;
+        const logoHeight = 3.5;
+
+        // 拱門橫樑 logo - 橫樑沿著 X 軸，所以 logo 應該在 Z 方向的前後
+        const logoGeo = new THREE.PlaneGeometry(logoWidth, logoHeight);
+
+        // 前側 logo（面向車輛來的方向，-Z）
+        const logoFront = new THREE.Mesh(logoGeo, logoMaterial);
+        logoFront.position.set(this.trackRadius, 8, -0.6);
+        logoFront.rotation.y = Math.PI;  // 面向 -Z 方向
+        this.scene.add(logoFront);
+
+        // 後側 logo（面向車輛去的方向，+Z）
+        const logoBack = new THREE.Mesh(logoGeo, logoMaterial);
+        logoBack.position.set(this.trackRadius, 8, 0.6);
+        // 不旋轉，預設面向 +Z 方向
+        this.scene.add(logoBack);
+
+        // 在賽道周圍放置贊助商廣告牌
+        this.createSponsorBillboards(texture);
     }
 
     // ==================== 創建贊助商廣告牌 ====================
@@ -733,18 +747,27 @@ class RacingGame {
 
     // ==================== 觸控控制（手機支援）====================
     setupTouchControls() {
-        // 創建觸控控制容器
+        // 手機模式啟用自動加速
+        this.mobileAutoAccelerate = true;
+
+        // 創建觸控控制容器 - 只有方向控制
         const touchContainer = document.createElement('div');
         touchContainer.id = 'touch-controls';
         touchContainer.innerHTML = `
-            <div id="joystick-container">
-                <div id="joystick-base">
-                    <div id="joystick-knob"></div>
+            <div id="joystick-left">
+                <div id="joystick-base-left">
+                    <div id="joystick-knob-left">◀</div>
                 </div>
+                <span class="direction-label">LEFT</span>
             </div>
-            <div id="pedal-container">
-                <button id="gas-btn" class="pedal-btn gas">▲<br>GAS</button>
-                <button id="brake-btn" class="pedal-btn brake">▼<br>BRAKE</button>
+            <div id="touch-info">
+                <span>🏎️ 自動加速中</span>
+            </div>
+            <div id="joystick-right">
+                <div id="joystick-base-right">
+                    <div id="joystick-knob-right">▶</div>
+                </div>
+                <span class="direction-label">RIGHT</span>
             </div>
         `;
         document.body.appendChild(touchContainer);
@@ -754,86 +777,65 @@ class RacingGame {
         style.textContent = `
             #touch-controls {
                 position: fixed;
-                bottom: 0;
+                bottom: 20px;
                 left: 0;
                 right: 0;
-                height: 200px;
                 display: flex;
                 justify-content: space-between;
+                align-items: center;
+                padding: 0 20px;
                 pointer-events: none;
                 z-index: 1000;
             }
             
-            #joystick-container {
-                width: 180px;
-                height: 180px;
-                margin: 10px 20px;
+            #joystick-left, #joystick-right {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
                 pointer-events: auto;
             }
             
-            #joystick-base {
-                width: 140px;
-                height: 140px;
-                background: rgba(255, 255, 255, 0.2);
-                border: 3px solid rgba(0, 255, 136, 0.6);
+            #joystick-base-left, #joystick-base-right {
+                width: 80px;
+                height: 80px;
+                background: rgba(0, 255, 136, 0.3);
+                border: 3px solid rgba(0, 255, 136, 0.8);
                 border-radius: 50%;
-                position: relative;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                transition: transform 0.1s, background 0.1s;
             }
             
-            #joystick-knob {
-                width: 60px;
-                height: 60px;
-                background: linear-gradient(135deg, #00ff88 0%, #00aaff 100%);
-                border-radius: 50%;
-                position: absolute;
-                box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
-                transition: transform 0.05s ease-out;
+            #joystick-base-left:active, #joystick-base-right:active {
+                transform: scale(0.9);
+                background: rgba(0, 255, 136, 0.6);
             }
             
-            #pedal-container {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                margin: 10px 20px;
-                pointer-events: auto;
-            }
-            
-            .pedal-btn {
-                width: 100px;
-                height: 80px;
-                border: none;
-                border-radius: 15px;
-                font-size: 16px;
-                font-weight: bold;
+            #joystick-knob-left, #joystick-knob-right {
+                font-size: 32px;
                 color: white;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-                cursor: pointer;
-                transition: transform 0.1s, box-shadow 0.1s;
+                text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
             }
             
-            .pedal-btn.gas {
-                background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
-                box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+            .direction-label {
+                color: rgba(255, 255, 255, 0.8);
+                font-size: 14px;
+                margin-top: 8px;
+                font-weight: bold;
             }
             
-            .pedal-btn.brake {
-                background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
-                box-shadow: 0 4px 15px rgba(255, 68, 68, 0.4);
+            #touch-info {
+                background: rgba(0, 0, 0, 0.5);
+                padding: 10px 20px;
+                border-radius: 20px;
+                border: 2px solid rgba(0, 255, 136, 0.5);
             }
             
-            .pedal-btn:active {
-                transform: scale(0.95);
-            }
-            
-            .pedal-btn.gas:active {
-                box-shadow: 0 2px 10px rgba(0, 255, 136, 0.8);
-            }
-            
-            .pedal-btn.brake:active {
-                box-shadow: 0 2px 10px rgba(255, 68, 68, 0.8);
+            #touch-info span {
+                color: #00ff88;
+                font-size: 14px;
+                font-weight: bold;
             }
             
             @media (min-width: 768px) and (hover: hover) {
@@ -844,76 +846,24 @@ class RacingGame {
         `;
         document.head.appendChild(style);
 
-        // 搖桿邏輯
-        const joystickBase = document.getElementById('joystick-base');
-        const joystickKnob = document.getElementById('joystick-knob');
-        let joystickActive = false;
-        let joystickCenter = { x: 0, y: 0 };
-        const maxDistance = 40;
-
-        const handleJoystickStart = (e) => {
+        // 左方向按鈕
+        const leftBtn = document.getElementById('joystick-base-left');
+        leftBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            joystickActive = true;
-            const rect = joystickBase.getBoundingClientRect();
-            joystickCenter = {
-                x: rect.left + rect.width / 2,
-                y: rect.top + rect.height / 2
-            };
-        };
-
-        const handleJoystickMove = (e) => {
-            if (!joystickActive) return;
-            e.preventDefault();
-
-            const touch = e.touches ? e.touches[0] : e;
-            const deltaX = touch.clientX - joystickCenter.x;
-            const deltaY = touch.clientY - joystickCenter.y;
-
-            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
-            const angle = Math.atan2(deltaY, deltaX);
-
-            const knobX = Math.cos(angle) * distance;
-            const knobY = Math.sin(angle) * distance;
-
-            joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
-
-            // 更新方向控制
-            const threshold = 15;
-            this.keys.left = deltaX < -threshold;
-            this.keys.right = deltaX > threshold;
-        };
-
-        const handleJoystickEnd = () => {
-            joystickActive = false;
-            joystickKnob.style.transform = 'translate(0, 0)';
-            this.keys.left = false;
-            this.keys.right = false;
-        };
-
-        joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
-        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
-        document.addEventListener('touchend', handleJoystickEnd);
-
-        // 油門和煞車按鈕
-        const gasBtn = document.getElementById('gas-btn');
-        const brakeBtn = document.getElementById('brake-btn');
-
-        gasBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.keys.forward = true;
+            this.keys.left = true;
         }, { passive: false });
-
-        gasBtn.addEventListener('touchend', () => {
-            this.keys.forward = false;
+        leftBtn.addEventListener('touchend', () => {
+            this.keys.left = false;
         });
 
-        brakeBtn.addEventListener('touchstart', (e) => {
+        // 右方向按鈕
+        const rightBtn = document.getElementById('joystick-base-right');
+        rightBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            this.keys.backward = true;
+            this.keys.right = true;
         }, { passive: false });
-
-        brakeBtn.addEventListener('touchend', () => {
-            this.keys.backward = false;
+        rightBtn.addEventListener('touchend', () => {
+            this.keys.right = false;
         });
     }
 
@@ -994,7 +944,10 @@ class RacingGame {
         if (!this.started || this.paused) return;
 
         // 加速/減速
-        if (this.keys.forward) {
+        // 手機自動加速
+        const shouldAccelerate = this.keys.forward || this.mobileAutoAccelerate;
+
+        if (shouldAccelerate) {
             this.carSpeed += this.acceleration * dt;
             if (this.carSpeed > this.maxSpeed) this.carSpeed = this.maxSpeed;
         } else if (this.keys.backward) {
