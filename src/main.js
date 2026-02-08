@@ -677,6 +677,7 @@ class RacingGame {
 
     // ==================== 輸入處理 ====================
     setupInput() {
+        // 鍵盤控制
         document.addEventListener('keydown', (e) => {
             if (this.paused && e.key !== 'Escape') return;
 
@@ -722,6 +723,197 @@ class RacingGame {
                     this.keys.right = false;
                     break;
             }
+        });
+
+        // 檢測是否為觸控設備
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            this.setupTouchControls();
+        }
+    }
+
+    // ==================== 觸控控制（手機支援）====================
+    setupTouchControls() {
+        // 創建觸控控制容器
+        const touchContainer = document.createElement('div');
+        touchContainer.id = 'touch-controls';
+        touchContainer.innerHTML = `
+            <div id="joystick-container">
+                <div id="joystick-base">
+                    <div id="joystick-knob"></div>
+                </div>
+            </div>
+            <div id="pedal-container">
+                <button id="gas-btn" class="pedal-btn gas">▲<br>GAS</button>
+                <button id="brake-btn" class="pedal-btn brake">▼<br>BRAKE</button>
+            </div>
+        `;
+        document.body.appendChild(touchContainer);
+
+        // 添加觸控控制樣式
+        const style = document.createElement('style');
+        style.textContent = `
+            #touch-controls {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 200px;
+                display: flex;
+                justify-content: space-between;
+                pointer-events: none;
+                z-index: 1000;
+            }
+            
+            #joystick-container {
+                width: 180px;
+                height: 180px;
+                margin: 10px 20px;
+                pointer-events: auto;
+            }
+            
+            #joystick-base {
+                width: 140px;
+                height: 140px;
+                background: rgba(255, 255, 255, 0.2);
+                border: 3px solid rgba(0, 255, 136, 0.6);
+                border-radius: 50%;
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            #joystick-knob {
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, #00ff88 0%, #00aaff 100%);
+                border-radius: 50%;
+                position: absolute;
+                box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+                transition: transform 0.05s ease-out;
+            }
+            
+            #pedal-container {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin: 10px 20px;
+                pointer-events: auto;
+            }
+            
+            .pedal-btn {
+                width: 100px;
+                height: 80px;
+                border: none;
+                border-radius: 15px;
+                font-size: 16px;
+                font-weight: bold;
+                color: white;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                cursor: pointer;
+                transition: transform 0.1s, box-shadow 0.1s;
+            }
+            
+            .pedal-btn.gas {
+                background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+                box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+            }
+            
+            .pedal-btn.brake {
+                background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+                box-shadow: 0 4px 15px rgba(255, 68, 68, 0.4);
+            }
+            
+            .pedal-btn:active {
+                transform: scale(0.95);
+            }
+            
+            .pedal-btn.gas:active {
+                box-shadow: 0 2px 10px rgba(0, 255, 136, 0.8);
+            }
+            
+            .pedal-btn.brake:active {
+                box-shadow: 0 2px 10px rgba(255, 68, 68, 0.8);
+            }
+            
+            @media (min-width: 768px) and (hover: hover) {
+                #touch-controls {
+                    display: none;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 搖桿邏輯
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickKnob = document.getElementById('joystick-knob');
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        const maxDistance = 40;
+
+        const handleJoystickStart = (e) => {
+            e.preventDefault();
+            joystickActive = true;
+            const rect = joystickBase.getBoundingClientRect();
+            joystickCenter = {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            };
+        };
+
+        const handleJoystickMove = (e) => {
+            if (!joystickActive) return;
+            e.preventDefault();
+
+            const touch = e.touches ? e.touches[0] : e;
+            const deltaX = touch.clientX - joystickCenter.x;
+            const deltaY = touch.clientY - joystickCenter.y;
+
+            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
+            const angle = Math.atan2(deltaY, deltaX);
+
+            const knobX = Math.cos(angle) * distance;
+            const knobY = Math.sin(angle) * distance;
+
+            joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+
+            // 更新方向控制
+            const threshold = 15;
+            this.keys.left = deltaX < -threshold;
+            this.keys.right = deltaX > threshold;
+        };
+
+        const handleJoystickEnd = () => {
+            joystickActive = false;
+            joystickKnob.style.transform = 'translate(0, 0)';
+            this.keys.left = false;
+            this.keys.right = false;
+        };
+
+        joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
+        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
+        document.addEventListener('touchend', handleJoystickEnd);
+
+        // 油門和煞車按鈕
+        const gasBtn = document.getElementById('gas-btn');
+        const brakeBtn = document.getElementById('brake-btn');
+
+        gasBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.keys.forward = true;
+        }, { passive: false });
+
+        gasBtn.addEventListener('touchend', () => {
+            this.keys.forward = false;
+        });
+
+        brakeBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.keys.backward = true;
+        }, { passive: false });
+
+        brakeBtn.addEventListener('touchend', () => {
+            this.keys.backward = false;
         });
     }
 
