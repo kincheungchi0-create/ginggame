@@ -723,19 +723,19 @@ class RacingGame {
         windshield.rotation.x = 0.3;
         this.car.add(windshield);
 
-        // 車輪
+        // 車輪 - Bigger and wider for better grip look
         this.wheels = [];
-        const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 24);
         const wheelMat = new THREE.MeshStandardMaterial({
             color: 0x222222,
             roughness: 0.6
         });
 
         const wheelPositions = [
-            { x: -1.1, y: 0.4, z: 1.3 },   // 前左
-            { x: 1.1, y: 0.4, z: 1.3 },    // 前右
-            { x: -1.1, y: 0.4, z: -1.3 },  // 後左
-            { x: 1.1, y: 0.4, z: -1.3 }    // 後右
+            { x: -1.2, y: 0.55, z: 1.3 },   // 前左
+            { x: 1.2, y: 0.55, z: 1.3 },    // 前右
+            { x: -1.2, y: 0.55, z: -1.3 },  // 後左
+            { x: 1.2, y: 0.55, z: -1.3 }    // 後右
         ];
 
         wheelPositions.forEach(pos => {
@@ -786,7 +786,7 @@ class RacingGame {
         // 設置初始位置 - Use getPoint(0)
         const startPos = this.trackCurve ? this.trackCurve.getPoint(0) : new THREE.Vector3(0, 0, 0);
         this.car.position.copy(startPos);
-        this.car.position.y += 0.5;
+        // this.car.position.y += 0.5; // Removed to lower car to ground
         this.car.rotation.order = 'YXZ'; // Important for slope
 
         // Initial rotation: look at tangent
@@ -1409,7 +1409,7 @@ class RacingGame {
         this.car.rotation.y = this.carAngle;
 
         // Wheels
-        const wheelRotation = this.carSpeed * dt * 0.5;
+        const wheelRotation = this.carSpeed * dt * 0.35; // Adjusted for larger wheels
         this.wheels.forEach(wheel => {
             wheel.rotation.x += wheelRotation;
         });
@@ -1447,7 +1447,7 @@ class RacingGame {
 
         if (validHit) {
             const hit = validHit;
-            const targetY = hit.point.y + 0.5;
+            const targetY = hit.point.y; // Adjusted for ground-level origin
             this.car.position.y += (targetY - this.car.position.y) * 0.5; // Faster response
 
             // Align to normal
@@ -1462,7 +1462,7 @@ class RacingGame {
         } else {
             // Raycast missed or all hits invalid
             // Use curve height + offset
-            const targetY = curvePt.y + 0.5;
+            const targetY = curvePt.y; // Adjusted for ground-level origin
             // Snap faster if we lost tracking
             this.car.position.y = targetY;
 
