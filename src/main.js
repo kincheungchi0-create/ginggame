@@ -157,7 +157,12 @@ class RacingGame {
         const decalTexture = new THREE.CanvasTexture(decalCanvas);
         decalTexture.anisotropy = 16;
 
-        return { main: texture, decal: decalTexture };
+        // GTJAI Logo (Load from URL)
+        const loader = new THREE.TextureLoader();
+        const gtjaiTexture = loader.load('https://www.gtjai.com/upload/2018-06-15/logo.png');
+        gtjaiTexture.anisotropy = 16;
+
+        return { main: texture, decal: decalTexture, gtjai: gtjaiTexture };
     }
 
     // ==================== 創建賽道 (Figure-8) ====================
@@ -299,6 +304,13 @@ class RacingGame {
             color: 0xffffff
         });
 
+        // Alternate material for GTJAI
+        const gtjaiMat = new THREE.MeshStandardMaterial({
+            map: this.brandingTextures.gtjai,
+            color: 0xffffff,
+            transparent: true // PNG might have transparency
+        });
+
         const lightGeo = new THREE.SphereGeometry(0.2);
         const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
@@ -307,8 +319,11 @@ class RacingGame {
             const layout = this.trackLayout[i];
             const tangent = layout.tangent;
 
+            // Perform alternate branding (every 4th barrier is GTJAI)
+            const mat = (i % 8 === 0) ? gtjaiMat : barrierMat;
+
             // 左側護欄
-            const bLeft = new THREE.Mesh(barrierGeo, barrierMat);
+            const bLeft = new THREE.Mesh(barrierGeo, mat);
             bLeft.position.copy(layout.pLeft);
             bLeft.position.y += 0.6; // 放置在路面上方
             // 面向賽道切線方向
@@ -316,7 +331,7 @@ class RacingGame {
             this.scene.add(bLeft);
 
             // 右側護欄
-            const bRight = new THREE.Mesh(barrierGeo, barrierMat);
+            const bRight = new THREE.Mesh(barrierGeo, mat);
             bRight.position.copy(layout.pRight);
             bRight.position.y += 0.6;
             bRight.lookAt(bRight.position.clone().add(tangent));
@@ -628,9 +643,11 @@ class RacingGame {
         line.position.y += 0.3;
         // 面向切線 (平面默認面向Z，旋轉90度變平)
         line.rotation.x = -Math.PI / 2;
-        // Z 旋轉對齊跑道
+        // Z 旋轉對齊跑道 - 旋轉 90 度 (Math.PI/2)
         const angle = Math.atan2(tangent.x, tangent.z);
-        line.rotation.z = -angle + Math.PI / 2;
+        // Previously: line.rotation.z = -angle + Math.PI/2;
+        // Requested rotate 90 degree again:
+        line.rotation.z = -angle;
 
         this.scene.add(line);
     }
