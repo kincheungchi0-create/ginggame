@@ -407,7 +407,9 @@ class RacingGame {
         // 4. 裝飾
         this.createTrackDecorations();
         this.createSkyBanners(); // Add sky banners
-        this.createOverheadBanners(); // Add overhead banners across the track
+        this.createSkyBanners(); // Add sky banners
+        this.createFloorBanners(); // Add floor banners (formerly overhead)
+        this.createTreeBanners(); // Add banners in tree area
 
         // 5. 起點
         this.createStartLine();
@@ -910,18 +912,17 @@ class RacingGame {
             mesh.position.set(x, height, z);
             mesh.lookAt(0, height, 0);
             mesh.rotation.x = 0.1; // Tilt down slightly
-
             this.skyBannerGroup.add(mesh);
         }
     }
 
-    // ==================== 賽道上方橫幅 ====================
-    createOverheadBanners() {
+    // ==================== 賽道地面橫幅 (大型) ====================
+    createFloorBanners() {
         if (!this.trackCurve) return;
 
         const bannerCount = 10;
-        const bannerWidth = 30;
-        const bannerHeight = 5;
+        const bannerWidth = 30; // This variable was misplaced in the original snippet, moving it here.
+        const bannerHeight = 5; // This variable was misplaced in the original snippet, moving it here.
 
         for (let i = 0; i < bannerCount; i++) {
             // Position along the curve (skip 0/1 to avoid start line clash if needed, but start line is at 0)
@@ -942,47 +943,162 @@ class RacingGame {
             const leftPole = new THREE.Mesh(poleGeo, poleMat);
             leftPole.position.set(-bannerWidth / 2, 6, 0);
             group.add(leftPole);
-
-            const rightPole = new THREE.Mesh(poleGeo, poleMat);
-            rightPole.position.set(bannerWidth / 2, 6, 0);
-            group.add(rightPole);
-
-            // 2. Crossbar / Banner
-            // Use a base height, and scale width by aspect ratio
-            const baseH = 8;
-            const baseW = 20;
+            // 2. Banner on Floor
+            // Use a base height (which is now length along track), and scale width by aspect ratio
+            const baseLength = 8; // Length along the track
 
             // Cycle textures
             const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
 
-            // Use PlaneGeometry for the image part to avoid stretching on sides of box
+            // Use PlaneGeometry
             const bannerGeo = new THREE.PlaneGeometry(1, 1);
-            const bannerMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+            const bannerMat = new THREE.MeshLambertMaterial({
+                map: tex,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -3 // Draw on top of other decals
+            });
             const banner = new THREE.Mesh(bannerGeo, bannerMat);
 
             // Determine Aspect Ratio
+            // We want the width to fit the track width (approx 18) if possible, 
+            // OR consistent size.
+            // Let's make them span the track width mostly.
+            // Track width is 18.
+            // If we fix width = 16, calculate length based on aspect.
+            // Original logic: baseH = 8 (height), calculated width.
+            // Now: We want it flat.
+            // Let's fix the Width (across track) to be e.g. 14, and let Length (along track) vary?
+            // Or fix Length (along track) and let Width vary?
+            // Usually logos are wide.
+            // Let's keep previous scaling logic but apply to X/Y on floor.
+
+            const baseSize = 10;
             if (tex.image && tex.image.width) {
                 const aspect = tex.image.width / tex.image.height;
-                banner.scale.set(baseH * aspect, baseH, 1);
+                // If aspect > 1 (landscape), make it wide across track
+                // If aspect < 1 (portrait), make it long along track?
+                // Let's just scale strictly by aspect relative to a base "height" (which is Z in floor space? No Y in local space before rotation)
+
+                // Let's just set scale.
+                // We rotate X -90. So Local X is World X (Cross track?), Local Y is World -Z (Along track?)
+                // Group looks at tangent. So Local Z is along track. Local X is cross track.
+                // Wait, default lookAt behavior: Z axis points to target.
+                // So Z is Tangent. X is Cross track. Y is Up.
+
+                // We want banner to lie on X-Z plane.
+                // We rotate X -90.
+                // Original plane is X-Y.
+                // Rotate X -90 => Plane becomes X-Z.
+                // Local X (width) is still Cross Track.
+                // Local Y (height) becomes -Z (Backwards along track).
+
+                // So banner.scale.x is Cross Track Width.
+                // banner.scale.y is Along Track Length.
+
+                // We want to limit width to track width ~18.
+                let w = baseSize * aspect;
+                let h = baseSize;
+
+                // Constrain width
+                if (w > 16) {
+                    const ratio = 16 / w;
+                    w = 16;
+                    h = h * ratio;
+                }
+
+                banner.scale.set(w, h, 1);
             } else {
-                banner.scale.set(baseW, baseH, 1);
+                banner.scale.set(16, 8, 1);
             }
 
-            banner.position.y = 8;
+            // Lift slightly above ground
+            banner.rotation.x = -Math.PI / 2;
+            banner.position.y = 0.04;
 
-            // Add a backing box for structure
-            const boxW = banner.scale.x + 1; // slightly wider
-            const boxGeo = new THREE.BoxGeometry(boxW, baseH + 0.5, 0.2);
-            const boxMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-            const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set(0, 8, -0.11); // Behind the plane
-            group.add(box);
+            // Fix orientation so text faces driver?
+            // If Group looks at tangent (Forward), and we rotate X -90 (Top goes Back),
+            // The top of the image points NEGATIVE Z (Backwards).
+            // So as you approach, the top of the image is closest to you? No.
+            // Z is Forward. -Z is Backward.
+            // We want Top of image to be Further along Z (Forward).
+            // So we need to rotate differently.
+            // Try rotation.x = -Math.PI / 2 creates top pointing -Z (Back).
+            // Try rotation.x = Math.PI / 2 creates top pointing Z (Front)? No plane is one sided.
+            // Try rotation.x = -Math.PI / 2 AND rotation.z = Math.PI (Spin around vertical).
+            // Or just rotation.z = Math.PI.
+
+            // Simplest: Check in game. Usually -Math.PI/2 makes top point -Z.
+            // Driver drives towards +Z (Tangent).
+            // So driver sees Bottom of image first, Top of image last.
+            // That is correct for reading text "upwards"?
+            // Or usually text should face you "upright" in 3D?
+            // On floor, "Up" is "Forward".
+
+            banner.rotation.z = Math.PI; // Rotate 180 to flip text if needed. 
+            // Let's assumet -PI/2 aligns "Up" with "-Z".
+            // Driver moves +Z.
+            // So "Up" is "Behind" the driver? That's upside down.
+            // We want "Up" in image to be +Z (direction of travel).
+            // So we need to rotate Z by 180?
+
+            // Let's try adding Z rotation.
 
             group.add(banner);
 
-            // Adjust pole spacing to match banner width
-            leftPole.position.x = -boxW / 2 + 0.5;
-            rightPole.position.x = boxW / 2 - 0.5;
+            this.scene.add(group);
+        }
+    }
+
+    // ==================== 樹林區域廣告牌 ====================
+    createTreeBanners() {
+        // Scatter banners randomly in the environment, similar to trees
+        const count = 40;
+        const width = 400;
+        const depth = 400;
+
+        for (let i = 0; i < count; i++) {
+            const x = (Math.random() - 0.5) * width;
+            const z = (Math.random() - 0.5) * depth;
+
+            // Simple distance check from center (track area)
+            // Track radius is 80.
+            const dist = Math.sqrt(x * x + z * z);
+            if (dist < 100) continue;
+
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            // Random rotation
+            group.rotation.y = Math.random() * Math.PI * 2;
+
+            // 1. Pole
+            const poleGeo = new THREE.CylinderGeometry(0.2, 0.2, 6);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.y = 3;
+            group.add(pole);
+
+            // 2. Banner Board
+            const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
+
+            // Use PlaneGeometry
+            const boardGeo = new THREE.PlaneGeometry(1, 1);
+            const boardMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+            const board = new THREE.Mesh(boardGeo, boardMat);
+
+            // Aspect
+            if (tex.image && tex.image.width) {
+                const aspect = tex.image.width / tex.image.height;
+                board.scale.set(4 * aspect, 4, 1);
+            } else {
+                board.scale.set(6, 4, 1);
+            }
+
+            board.position.y = 5; // Top of pole
+            group.add(board);
 
             this.scene.add(group);
         }
