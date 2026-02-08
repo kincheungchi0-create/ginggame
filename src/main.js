@@ -65,6 +65,7 @@ class RacingGame {
         };
 
         // ==================== 初始化各個組件 ====================
+        this.brandingTextures = this.createBrandingTextures();
         this.setupLights();
         this.createTrack();
         this.createCar();
@@ -108,47 +109,256 @@ class RacingGame {
         this.scene.add(fill);
     }
 
-    // ==================== 創建賽道 ====================
+    // ==================== 創建品牌素材 (CMBI) ====================
+    createBrandingTextures() {
+        // CMBI Logo (Red background, White text)
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#E31E26'; // CMBI Red
+        ctx.fillRect(0, 0, 512, 128);
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CMB International', 256, 64);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.anisotropy = 16;
+
+        // Transparency version for decals
+        const decalCanvas = document.createElement('canvas');
+        decalCanvas.width = 512;
+        decalCanvas.height = 512;
+        const dCtx = decalCanvas.getContext('2d');
+        // Transparent background
+        dCtx.clearRect(0, 0, 512, 512);
+
+        // Circle background
+        dCtx.fillStyle = '#E31E26';
+        dCtx.beginPath();
+        dCtx.arc(256, 256, 200, 0, Math.PI * 2);
+        dCtx.fill();
+
+        dCtx.fillStyle = 'white';
+        dCtx.font = 'bold 80px Arial';
+        dCtx.textAlign = 'center';
+        dCtx.textBaseline = 'middle';
+        dCtx.fillText('CMBI', 256, 256);
+
+        const decalTexture = new THREE.CanvasTexture(decalCanvas);
+        decalTexture.anisotropy = 16;
+
+        return { main: texture, decal: decalTexture };
+    }
+
+    // ==================== 創建賽道 (Figure-8) ====================
     createTrack() {
-        // 賽道材質 - 深色柏油路面
+        // 1. 生成 8 字型路徑 (Lemniscate like shape with elevation)
+        const points = [];
+        const segments = 200;
+        const size = 120; // Scale
+
+        for (let i = 0; i <= segments; i++) {
+            const t = (i / segments) * Math.PI * 2;
+
+            // Parametric Figure-8
+            const x = (size * Math.cos(t)) / (1 + Math.sin(t) * Math.sin(t));
+            const z = (size * Math.sin(t) * Math.cos(t)) / (1 + Math.sin(t) * Math.sin(t));
+
+            // Corrected Elevation Logic
+            // t=PI/2 => y=High. t=3PI/2 => y=Low.
+            // sin(PI/2) = 1. sin(3PI/2) = -1.
+            // Map -1..1 to 0..24
+            const y = (Math.sin(t) + 1) * 12; // 0 to 24
+
+            points.push(new THREE.Vector3(x, y, z));
+        }
+
+        this.trackCurve = new THREE.CatmullRomCurve3(points);
+        this.trackCurve.closed = true;
+
+        // 2. 創建賽道 Mesh
+        const trackWidth = 20;
+        const trackGeo = new THREE.BoxGeometry(trackWidth, 1, 1); // Will be extruded basically
+
+        // Custom Ribbon Mesh Generation for better control (banking not needed yet but good for future)
+        // Or simple TubeGeometry? Tube is circular cross section.
+        // Let's use ExtrudeGeometry with a shape along the path.
+        const shape = new THREE.Shape();
+        shape.moveTo(-trackWidth / 2, 0);
+        shape.lineTo(trackWidth / 2, 0);
+        shape.lineTo(trackWidth / 2, -1);
+        shape.lineTo(-trackWidth / 2, -1);
+        shape.lineTo(-trackWidth / 2, 0);
+
+        const extrudeSettings = {
+            steps: 400,
+            bevelEnabled: false,
+            extrudePath: this.trackCurve
+        };
+
+        const trackGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
         const trackMaterial = new THREE.MeshStandardMaterial({
-            color: 0x333344,
+            color: 0x333333,
             roughness: 0.8,
-            metalness: 0.1
+            metalness: 0.2
         });
 
-        // 創建圓形賽道
-        const trackShape = new THREE.Shape();
-        const outerRadius = this.trackRadius + this.trackWidth / 2;
-        const innerRadius = this.trackRadius - this.trackWidth / 2;
+        this.trackMesh = new THREE.Mesh(trackGeometry, trackMaterial);
+        this.trackMesh.receiveShadow = true;
+        this.scene.add(this.trackMesh);
 
-        // 外圈
-        trackShape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
-        // 內圈（孔洞）
-        const holePath = new THREE.Path();
-        holePath.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
-        trackShape.holes.push(holePath);
+        // 3. 獲取 Raycast 用的 Mesh 列表
+        this.collidableMeshes = [this.trackMesh];
 
-        // 擠出賽道幾何體
-        const trackGeometry = new THREE.ExtrudeGeometry(trackShape, {
-            depth: 0.3,
-            bevelEnabled: false
-        });
-        trackGeometry.rotateX(-Math.PI / 2);
+        // 4. 裝飾
+        this.createTrackDecorations();
 
-        const track = new THREE.Mesh(trackGeometry, trackMaterial);
-        track.position.y = 0;
-        track.receiveShadow = true;
-        this.scene.add(track);
-
-        // 賽道中心線
-        this.createTrackLines();
-
-        // 賽道邊界
-        this.createTrackBorders();
-
-        // 起點/終點線
+        // 5. 起點
         this.createStartLine();
+
+        // 6. 初始化 Minimap
+        this.initMinimap();
+    }
+
+    createTrackDecorations() {
+        // 沿著路徑生成護欄和燈光
+        const points = this.trackCurve.getSpacedPoints(100);
+        const frenetFrames = this.trackCurve.computeFrenetFrames(100, true);
+
+        const barrierGeo = new THREE.BoxGeometry(0.5, 1.2, 3);
+        const barrierMat = new THREE.MeshStandardMaterial({
+            map: this.brandingTextures.main,
+            color: 0xffffff
+        }); // CMBI Guardrails
+
+        const lightGeo = new THREE.SphereGeometry(0.2);
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red lights
+
+        const trackWidth = 20;
+
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const tangent = frenetFrames.tangents[i];
+            const normal = frenetFrames.normals[i];
+            const binormal = frenetFrames.binormals[i];
+
+            // 護欄位置 (左和右)
+            // Left
+            const leftPos = p.clone().add(binormal.clone().multiplyScalar(trackWidth / 2));
+            const rightPos = p.clone().add(binormal.clone().multiplyScalar(-trackWidth / 2));
+
+            // Place barriers every 2nd point
+            if (i % 2 === 0) {
+                const bLeft = new THREE.Mesh(barrierGeo, barrierMat);
+                bLeft.position.copy(leftPos);
+                bLeft.position.y += 0.6;
+                bLeft.lookAt(leftPos.clone().add(tangent));
+                this.scene.add(bLeft);
+
+                const bRight = new THREE.Mesh(barrierGeo, barrierMat);
+                bRight.position.copy(rightPos);
+                bRight.position.y += 0.6;
+                bRight.lookAt(rightPos.clone().add(tangent));
+                this.scene.add(bRight);
+            }
+
+            // Place lights
+            if (i % 5 === 0) {
+                const lLeft = new THREE.Mesh(lightGeo, lightMat);
+                lLeft.position.copy(leftPos);
+                lLeft.position.y += 1.5;
+                this.scene.add(lLeft);
+
+                const lRight = new THREE.Mesh(lightGeo, lightMat);
+                lRight.position.copy(rightPos);
+                lRight.position.y += 1.5;
+                this.scene.add(lRight);
+            }
+        }
+
+        // 交叉點的大型 Logo
+        // Cross points approx at index 0 and 50 (based on shape logic)
+        // Manual placement at origin (bottom) and bridge center (top)
+
+        // Ground Decal (Bottom Intersection)
+        const groundDecalGeo = new THREE.PlaneGeometry(30, 30);
+        const groundDecalMat = new THREE.MeshLambertMaterial({
+            map: this.brandingTextures.decal,
+            transparent: true,
+            opacity: 0.9,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4
+        });
+        const groundDecal = new THREE.Mesh(groundDecalGeo, groundDecalMat);
+        groundDecal.rotation.x = -Math.PI / 2;
+        groundDecal.position.set(0, 0.1, 0); // At origin, ground level
+        this.scene.add(groundDecal);
+
+        // Bridge Decal (Top Intersection) - High Point
+        const bridgeDecal = groundDecal.clone();
+        bridgeDecal.position.set(0, 24.1, 0); // High point is y=24
+        this.scene.add(bridgeDecal);
+
+        // Apex Billboards (End of loops)
+        // t=0 (Right Apex) and t=PI (Left Apex)
+        this.createApexBillboardAt(0);
+        this.createApexBillboardAt(Math.PI);
+    }
+
+    createApexBillboardAt(t) {
+        // Get position from curve
+        if (!this.trackCurve) return;
+        const pt = this.trackCurve.getPointAt(t / (Math.PI * 2)); // t is radians, getPointAt takes 0..1
+
+        // Offset outwards
+        const tangent = this.trackCurve.getTangentAt(t / (Math.PI * 2));
+        const normal = new THREE.Vector3(0, 1, 0);
+        const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+
+        // Push out by track width + extra
+        const offset = t === 0 ? -1 : 1; // Direction flip might be needed based on curve winding
+        // At t=0, moving +z is ... wait.
+        // Let's just push away from origin.
+        const dirToOrigin = pt.clone().normalize();
+        const billboardPos = pt.clone().add(dirToOrigin.multiplyScalar(20)); // Push OUT (away from center? no, push further OUT)
+        // Correct logic: At Apex, tangent is along Z (approx). Normal is Y. Binormal is X.
+        // We want to move along X (towards +/- infinity).
+        // Let's just simple logic:
+        const pos = pt.clone();
+        pos.x += pos.x > 0 ? 30 : -30; // Push further out in X
+
+        const group = new THREE.Group();
+        group.position.copy(pos);
+        group.lookAt(pt); // Face the track point
+
+        // Pole
+        const poleGeo = new THREE.CylinderGeometry(0.5, 0.5, 10);
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.y = 5;
+        group.add(pole);
+
+        // Board
+        const boardGeo = new THREE.BoxGeometry(20, 8, 1);
+        const boardMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            map: this.brandingTextures.main,
+            emissive: 0xffffff,
+            emissiveMap: this.brandingTextures.main,
+            emissiveIntensity: 0.5
+        });
+        const board = new THREE.Mesh(boardGeo, boardMat);
+        board.position.y = 10;
+        group.add(board);
+
+        this.scene.add(group);
     }
 
     // ==================== 賽道標線 ====================
@@ -187,31 +397,161 @@ class RacingGame {
         }
     }
 
-    // ==================== 賽道邊界 ====================
+    // ==================== 賽道邊界與護欄 ====================
     createTrackBorders() {
-        // 外邊界 - 紅白相間護欄
+        // 外邊界 - 紅白相間護欄 + 品牌廣告
         const outerRadius = this.trackRadius + this.trackWidth / 2 + 1;
         const innerRadius = this.trackRadius - this.trackWidth / 2 - 1;
         const postCount = 40;
 
+        // 護欄板幾何體 (Plane)
+        // 計算兩柱之間的弦長和角度
+        const segmentAngle = (Math.PI * 2) / postCount;
+
+        // 外圈板寬
+        const outerChord = 2 * outerRadius * Math.sin(segmentAngle / 2);
+        const outerPanelGeo = new THREE.PlaneGeometry(outerChord * 1.05, 1.5); // 稍微加寬以覆蓋縫隙
+
+        // 內圈板寬
+        const innerChord = 2 * innerRadius * Math.sin(segmentAngle / 2);
+        const innerPanelGeo = new THREE.PlaneGeometry(innerChord * 1.05, 1.5);
+
+        // 材質
+        const clsaMat = new THREE.MeshBasicMaterial({ map: this.brandingTextures.clsa, side: THREE.DoubleSide });
+        const citicMat = new THREE.MeshBasicMaterial({ map: this.brandingTextures.citic, side: THREE.DoubleSide });
+
         for (let i = 0; i < postCount; i++) {
             const angle = (i / postCount) * Math.PI * 2;
+            const nextAngle = ((i + 1) / postCount) * Math.PI * 2;
+            const midAngle = (angle + nextAngle) / 2;
             const isRed = i % 2 === 0;
 
-            // 外側護欄柱
+            // 1. 護欄柱
             this.createBarrierPost(
                 Math.cos(angle) * outerRadius,
                 Math.sin(angle) * outerRadius,
                 isRed ? 0xff3333 : 0xffffff
             );
 
-            // 內側護欄柱
             this.createBarrierPost(
                 Math.cos(angle) * innerRadius,
                 Math.sin(angle) * innerRadius,
                 isRed ? 0x3333ff : 0xffffff
             );
+
+            // 2. 品牌護欄板 (連接柱子)
+            // 決定材質 (交替)
+            const panelMat = i % 4 < 2 ? clsaMat : citicMat;
+
+            // 外側護欄板
+            const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
+            // 位置在弦的中點
+            const outerMidDist = outerRadius * Math.cos(segmentAngle / 2);
+            outerPanel.position.set(
+                Math.cos(midAngle) * outerMidDist,
+                1.0,
+                Math.sin(midAngle) * outerMidDist
+            );
+            // 旋轉面向圓心 (Plane預設面朝+Z)
+            outerPanel.rotation.y = -midAngle + Math.PI / 2;
+            // 讓Logo面向賽道內部 (外圈板，正面朝內)
+            outerPanel.lookAt(0, 1.0, 0);
+            this.scene.add(outerPanel);
+
+            // 內側護欄板
+            const innerPanel = new THREE.Mesh(innerPanelGeo, panelMat);
+            const innerMidDist = innerRadius * Math.cos(segmentAngle / 2);
+            innerPanel.position.set(
+                Math.cos(midAngle) * innerMidDist,
+                1.0,
+                Math.sin(midAngle) * innerMidDist
+            );
+            // 內圈板，需要面向外 (朝向賽道)
+            innerPanel.lookAt(0, 1.0, 0);
+            innerPanel.rotation.y += Math.PI; // 轉180度朝外
+            this.scene.add(innerPanel);
         }
+    }
+
+    // ==================== 賽道地面貼圖 (Decals) ====================
+    createRoadDecals() {
+        const count = 12;
+        const decalGeo = new THREE.PlaneGeometry(10, 4);
+
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2 + (Math.PI / count); // 錯開位置
+            const texture = i % 2 === 0 ? this.brandingTextures.clsa : this.brandingTextures.citic;
+
+            const mat = new THREE.MeshLambertMaterial({
+                map: texture,
+                transparent: true,
+                opacity: 0.8,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -2
+            });
+
+            const decal = new THREE.Mesh(decalGeo, mat);
+
+            // 放在路面上
+            decal.position.set(
+                Math.cos(angle) * this.trackRadius,
+                0.03, // 稍微高出路面
+                Math.sin(angle) * this.trackRadius
+            );
+
+            // 旋轉以貼合路面並面向正確方向
+            decal.rotation.x = -Math.PI / 2; // 平躺
+            decal.rotation.z = -angle + Math.PI / 2; // 跟隨賽道方向 (文字橫向跨越賽道)
+
+            this.scene.add(decal);
+        }
+    }
+
+    // ==================== 彎道廣告牌 ====================
+    createApexBillboards() {
+        // 在主要切點位置放置發光廣告牌
+        const locations = [0, Math.PI / 2, Math.PI, Math.PI * 1.5]; // 四個方位
+        const dist = this.trackRadius + 22; // 賽道外側
+
+        locations.forEach((angle, index) => {
+            const texture = index % 2 === 0 ? this.brandingTextures.clsa : this.brandingTextures.citic;
+            const group = new THREE.Group();
+
+            // 位置
+            group.position.set(
+                Math.cos(angle + 0.2) * dist, // 稍微偏移
+                0,
+                Math.sin(angle + 0.2) * dist
+            );
+
+            // 面向賽道/車輛駛來方向
+            // 在此圓形賽道，簡單面向圓心稍微偏一點即可
+            group.lookAt(0, 0, 0);
+
+            // 1. 支架
+            const poleGeo = new THREE.CylinderGeometry(0.4, 0.4, 6);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.y = 3;
+            group.add(pole);
+
+            // 2. 燈箱本體
+            const boxGeo = new THREE.BoxGeometry(14, 5, 1);
+            const boxMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                map: texture,
+                emissive: 0xffffff,
+                emissiveMap: texture,
+                emissiveIntensity: 0.8, // 自發光強度
+                roughness: 0.1
+            });
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.y = 6;
+            group.add(box);
+
+            this.scene.add(group);
+        });
     }
 
     // ==================== 護欄柱 ====================
@@ -228,17 +568,36 @@ class RacingGame {
         this.scene.add(post);
     }
 
-    // ==================== 起點/終點線 ====================
+    // ==================== 起點 ====================
     createStartLine() {
-        const lineWidth = this.trackWidth;
-        const lineDepth = 2;
+        // Simple start line at t=0
+        if (!this.trackCurve) return;
 
-        // 格子旗圖案
+        const pt = this.trackCurve.getPoint(0);
+        const tangent = this.trackCurve.getTangent(0);
+
+        const lineGeo = new THREE.PlaneGeometry(20, 2);
+        const texture = new THREE.CanvasTexture(this.createCheckerboardCanvas());
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.repeat.set(4, 1);
+
+        const lineMat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+        const line = new THREE.Mesh(lineGeo, lineMat);
+
+        line.position.copy(pt);
+        line.position.y += 0.1;
+        line.lookAt(pt.clone().add(tangent));
+        line.rotation.x = -Math.PI / 2;
+        line.rotateZ(Math.PI / 2);
+
+        this.scene.add(line);
+    }
+
+    createCheckerboardCanvas() {
         const canvas = document.createElement('canvas');
         canvas.width = 128;
         canvas.height = 32;
         const ctx = canvas.getContext('2d');
-
         const squareSize = 16;
         for (let x = 0; x < canvas.width; x += squareSize) {
             for (let y = 0; y < canvas.height; y += squareSize) {
@@ -246,161 +605,20 @@ class RacingGame {
                 ctx.fillRect(x, y, squareSize, squareSize);
             }
         }
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(4, 1);
-
-        const lineMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            side: THREE.DoubleSide
-        });
-
-        const lineGeometry = new THREE.PlaneGeometry(lineWidth, lineDepth);  // 交換寬高
-        const startLine = new THREE.Mesh(lineGeometry, lineMaterial);
-        startLine.rotation.x = -Math.PI / 2;
-        startLine.position.set(this.trackRadius, 0.35, 0);
-        this.scene.add(startLine);
-
-        // 起點拱門
-        this.createStartArch();
+        return canvas;
     }
 
-    // ==================== 起點拱門 ====================
-    createStartArch() {
-        const archMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ff88,
-            emissive: 0x00ff88,
-            emissiveIntensity: 0.3,
-            metalness: 0.8,
-            roughness: 0.2,
-            side: THREE.DoubleSide  // 確保雙面可見
-        });
 
-        // 創建拱門 Group，以便整體旋轉
-        const archGroup = new THREE.Group();
-
-        const halfWidth = this.trackWidth / 2 + 2;
-        const archHeight = 8;
-
-        // 在本地座標中，柱子沿著 X 軸排列（左右）
-        // 左柱（X 負方向）
-        const pillarGeo = new THREE.BoxGeometry(1, archHeight, 1);
-        const leftPillar = new THREE.Mesh(pillarGeo, archMaterial);
-        leftPillar.position.set(-halfWidth, archHeight / 2, 0);
-        leftPillar.castShadow = true;
-        archGroup.add(leftPillar);
-
-        // 右柱（X 正方向）
-        const rightPillar = new THREE.Mesh(pillarGeo, archMaterial);
-        rightPillar.position.set(halfWidth, archHeight / 2, 0);
-        rightPillar.castShadow = true;
-        archGroup.add(rightPillar);
-
-        // 橫樑 - 沿著 X 軸方向
-        const beamWidth = this.trackWidth + 6;
-        const beamGeo = new THREE.BoxGeometry(beamWidth, 1.5, 1);  // X 方向是寬
-        const beam = new THREE.Mesh(beamGeo, archMaterial);
-        beam.position.set(0, archHeight, 0);
-        beam.castShadow = true;
-        archGroup.add(beam);
-
-        // 設置拱門位置在賽道起點
-        // 起點位於 (trackRadius, 0, 0)
-        // 在此位置，賽道切線方向是 +Z（順時針）
-        // 拱門橫樑現在沿著本地 X 軸，當放置到世界座標時
-        // X 軸會橫跨賽道（從圓心向外的方向）
-        archGroup.position.set(this.trackRadius, 0, 0);
-
-        this.scene.add(archGroup);
-
-        // CITIC CLSA 贊助商 Logo 添加到拱門上
-        this.addSponsorLogo();
-    }
-
-    // ==================== 添加贊助商 Logo ====================
-    addSponsorLogo() {
-        // 使用 Canvas 創建 CMBI Logo
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-
-        // 背景
-        ctx.fillStyle = '#e31e26';  // 招商銀行紅色
-        ctx.fillRect(0, 0, 512, 128);
-
-        // CMBI 文字
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 60px Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('招銀國際 CMBI', 256, 64);
-
-        const texture = new THREE.CanvasTexture(canvas);
-
-        // 拱門上的 logo
-        const logoMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            transparent: false,
-            side: THREE.DoubleSide
-        });
-
-        // 計算合適的尺寸 (保持比例)
-        const logoWidth = 14;
-        const logoHeight = 3.5;
-
-        // 拱門橫樑 logo - 橫樑沿著 X 軸，所以 logo 應該在 Z 方向的前後
-        const logoGeo = new THREE.PlaneGeometry(logoWidth, logoHeight);
-
-        // 前側 logo（面向車輛來的方向，-Z）
-        const logoFront = new THREE.Mesh(logoGeo, logoMaterial);
-        logoFront.position.set(this.trackRadius, 8, -0.6);
-        logoFront.rotation.y = Math.PI;  // 面向 -Z 方向
-        this.scene.add(logoFront);
-
-        // 後側 logo（面向車輛去的方向，+Z）
-        const logoBack = new THREE.Mesh(logoGeo, logoMaterial);
-        logoBack.position.set(this.trackRadius, 8, 0.6);
-        // 不旋轉，預設面向 +Z 方向
-        this.scene.add(logoBack);
-
-        // 在賽道周圍放置贊助商廣告牌
-        this.createSponsorBillboards(texture);
-    }
-
-    // ==================== 創建贊助商廣告牌 ====================
-    createSponsorBillboards(logoTexture) {
-        const billboardCount = 8;
-
-        // 創建材質時不使用 DoubleSide，這樣可以確保正確的面朝向
-        const billboardMaterial = new THREE.MeshBasicMaterial({
-            map: logoTexture,
-            transparent: true,
-            side: THREE.FrontSide
-        });
-
-        for (let i = 0; i < billboardCount; i++) {
-            const angle = (i / billboardCount) * Math.PI * 2;
-            const distance = this.trackRadius + this.trackWidth / 2 + 10;
-
-            // 廣告牌幾何體
-            const billboardGeo = new THREE.PlaneGeometry(10, 3);
-            const billboard = new THREE.Mesh(billboardGeo, billboardMaterial);
-
-            // 設置位置（賽道外側）
-            billboard.position.x = Math.cos(angle) * distance;
-            billboard.position.z = Math.sin(angle) * distance;
-            billboard.position.y = 4;
-
-            // 讓廣告牌面向賽道中心
-            // Plane 的預設法線是 +Z，所以旋轉 Y 使其面向圓心
-            billboard.rotation.y = angle + Math.PI;
-
-            this.scene.add(billboard);
-        }
-    }
+    // Old assets removal
+    // createTrackLines, createTrackBorders, createRoadDecals, createApexBillboards, createStartArch, addSponsorLogo, createSponsorBillboards
+    // These methods can be removed or emptied as they are replaced by new decorations
+    createTrackLines() { }
+    createTrackBorders() { }
+    createRoadDecals() { }
+    createApexBillboards() { }
+    createStartArch() { }
+    addSponsorLogo() { }
+    createSponsorBillboards(tex) { }
 
     // ==================== 創建車輛 ====================
     createCar() {
@@ -506,9 +724,18 @@ class RacingGame {
         this.car.add(glow);
 
         // 設置初始位置（賽道上）
-        // 拱門在 z=0，車輛起點在拱門後方（z 為負值）
-        // 這樣往 +Z 方向開就會通過拱門
-        this.car.position.set(this.trackRadius, 0.5, -10);
+        // 設置初始位置 - Use getPoint(0)
+        const startPos = this.trackCurve ? this.trackCurve.getPoint(0) : new THREE.Vector3(0, 0, 0);
+        this.car.position.copy(startPos);
+        this.car.position.y += 0.5;
+        this.car.rotation.order = 'YXZ'; // Important for slope
+
+        // Initial rotation: look at tangent
+        if (this.trackCurve) {
+            const t = this.trackCurve.getTangent(0);
+            this.car.lookAt(startPos.clone().add(t));
+            this.carAngle = this.car.rotation.y;
+        }
         this.car.rotation.y = 0;  // 車頭朝向 +Z
         this.carAngle = 0;
 
@@ -663,6 +890,79 @@ class RacingGame {
         if (!this.speedElement) {
             this.createHUDElements();
         }
+
+        // Minimap
+        this.minimapCanvas = document.getElementById('minimap');
+        if (this.minimapCanvas) {
+            this.minimapCtx = this.minimapCanvas.getContext('2d');
+        }
+    }
+
+    initMinimap() {
+        if (!document.getElementById('minimap-container')) {
+            const container = document.createElement('div');
+            container.id = 'minimap-container';
+            container.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                width: 150px;
+                height: 150px;
+                background: rgba(0,0,0,0.5);
+                border: 2px solid #E31E26;
+                border-radius: 50%;
+                overflow: hidden;
+            `;
+
+            const canvas = document.createElement('canvas');
+            canvas.id = 'minimap';
+            canvas.width = 150;
+            canvas.height = 150;
+            container.appendChild(canvas);
+
+            document.body.appendChild(container);
+
+            this.minimapCanvas = canvas;
+            this.minimapCtx = canvas.getContext('2d');
+        }
+    }
+
+    updateMinimap() {
+        if (!this.minimapCtx || !this.trackCurve) return;
+
+        const ctx = this.minimapCtx;
+        const w = this.minimapCanvas.width;
+        const h = this.minimapCanvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw Track
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+
+        const points = this.trackCurve.getPoints(100);
+        // Scale factor: Track is approx 240 wide (size=120). Map is 150.
+        // Scale = 150 / 300 = 0.5
+        const scale = 0.4;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        points.forEach((p, i) => {
+            const mx = cx + p.x * scale;
+            const my = cy + p.z * scale; // Map Z to Y
+            if (i === 0) ctx.moveTo(mx, my);
+            else ctx.lineTo(mx, my);
+        });
+
+        ctx.stroke();
+
+        // Draw Car
+        const carPos = this.car.position;
+        ctx.fillStyle = '#E31E26';
+        ctx.beginPath();
+        ctx.arc(cx + carPos.x * scale, cy + carPos.z * scale, 4, 0, Math.PI * 2);
+        ctx.fill();
     }
 
     createHUDElements() {
@@ -997,19 +1297,77 @@ class RacingGame {
             this.car.position.x ** 2 + this.car.position.z ** 2
         );
 
-        const innerBound = this.trackRadius - this.trackWidth / 2;
-        const outerBound = this.trackRadius + this.trackWidth / 2;
+        // 2. Raycast to find ground (Handling elevation)
+        // Ray origin should be high enough above max height (24)
+        this.raycaster = this.raycaster || new THREE.Raycaster();
 
-        if (distFromCenter < innerBound || distFromCenter > outerBound) {
-            // 減速並推回賽道
-            this.carSpeed *= 0.9;
+        const rayOrigin = this.car.position.clone();
+        rayOrigin.y = 50; // High above
 
-            const angle = Math.atan2(this.car.position.z, this.car.position.x);
-            const targetDist = distFromCenter < innerBound ? innerBound + 1 : outerBound - 1;
+        this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
-            this.car.position.x = Math.cos(angle) * targetDist;
-            this.car.position.z = Math.sin(angle) * targetDist;
+        const hits = this.raycaster.intersectObject(this.trackMesh);
+
+        if (hits.length > 0) {
+            const hit = hits[0];
+            const targetY = hit.point.y + 0.5; // Axle height
+
+            // Smooth Y update
+            this.car.position.y += (targetY - this.car.position.y) * 0.2;
+
+            // Align car with ground normal
+            const n = hit.face.normal.clone();
+            // Since the generated mesh might have local transforms, we should be careful.
+            // But here trackMesh is at (0,0,0) with no rotation. So Face Normal is World Normal.
+
+            // We want the car's UP vector to match N, while keeping forward direction roughly same
+            // Use dummy object to calculate
+            const targetRot = new THREE.Object3D();
+            targetRot.position.copy(this.car.position);
+
+            // Look target: Current position + Forward vector projected on plane
+            // forward vector based on carAngle
+            const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
+
+            // Project fwd onto plane defined by normal n
+            // v_proj = v - (v . n) * n
+            const fwdProj = fwd.clone().sub(n.clone().multiplyScalar(fwd.dot(n))).normalize();
+
+            targetRot.up.copy(n);
+            targetRot.lookAt(targetRot.position.clone().add(fwdProj));
+
+            // Smoothly interpolate rotation (Quaternion slerp)
+            this.car.quaternion.slerp(targetRot.quaternion, 0.2);
+
+        } else {
+            // Off track!
+            // Apply simple gravity
+            this.car.position.y -= 0.5;
+            if (this.car.position.y < -10) {
+                // Reset
+                this.resetCar();
+            }
         }
+    }
+
+    resetCar() {
+        this.carSpeed = 0;
+        const pt = this.trackCurve.getPoint(0);
+        this.car.position.copy(pt);
+        this.car.position.y += 2;
+        this.car.lookAt(pt.clone().add(this.trackCurve.getTangent(0)));
+        this.carAngle = this.car.rotation.y;
+    }
+
+    // ==================== 保持車輛在賽道上 (Updated for Figure-8) ====================
+    keepCarOnTrack() {
+        // Since we use Raycast for ground, "Off Track" means raycast missed (handled above)
+        // Or we can check distance to curve.
+
+        // This function was enforcing circular boundary. Remove it or replace.
+        // For Figure 8, boundaries are complex. 
+        // We rely on the visual track width (mesh). 
+        // If raycast fails, we fall.
     }
 
     // ==================== 更新相機 ====================
@@ -1039,6 +1397,8 @@ class RacingGame {
 
     // ==================== 更新 HUD ====================
     updateHUD() {
+        this.updateMinimap();
+
         // 速度
         const speedKmh = Math.abs(Math.round(this.carSpeed * 3.6));
         if (this.speedElement) {
