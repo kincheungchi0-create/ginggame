@@ -1408,10 +1408,30 @@ class RacingGame {
 
         const hits = this.raycaster.intersectObject(this.trackMesh);
 
+        let validHit = null;
+
         if (hits.length > 0) {
-            const hit = hits[0];
+            // Find the hit that is closest to our expected curve height
+            // This prevents jumping to the bridge when we are below it, or falling through when on top
+            let minDiff = Infinity;
+
+            for (const hit of hits) {
+                // Check if this hit is plausible relative to curve height
+                // The track thickness is small, elevation differences at crossing are large (~15 units)
+                const diff = Math.abs(hit.point.y - curvePt.y);
+
+                // Allow some tolerance for banking/slopes, but reject the other layer
+                if (diff < 8 && diff < minDiff) {
+                    minDiff = diff;
+                    validHit = hit;
+                }
+            }
+        }
+
+        if (validHit) {
+            const hit = validHit;
             const targetY = hit.point.y + 0.5;
-            this.car.position.y += (targetY - this.car.position.y) * 0.3;
+            this.car.position.y += (targetY - this.car.position.y) * 0.5; // Faster response
 
             // Align to normal
             const n = hit.face.normal.clone();
@@ -1423,10 +1443,11 @@ class RacingGame {
             targetRot.lookAt(targetRot.position.clone().add(fwdProj));
             this.car.quaternion.slerp(targetRot.quaternion, 0.2);
         } else {
-            // Raycast missed (should not happen with constraint, but robust fallback)
+            // Raycast missed or all hits invalid
             // Use curve height + offset
             const targetY = curvePt.y + 0.5;
-            this.car.position.y += (targetY - this.car.position.y) * 0.1;
+            // Snap faster if we lost tracking
+            this.car.position.y = targetY;
 
             // Reset rotation to flat if flying
             const targetRot = new THREE.Object3D();
