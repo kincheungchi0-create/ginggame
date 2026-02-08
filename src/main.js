@@ -157,12 +157,30 @@ class RacingGame {
         const decalTexture = new THREE.CanvasTexture(decalCanvas);
         decalTexture.anisotropy = 16;
 
-        // GTJAI Logo (Load from URL)
+        // Load new banners from public folder
         const loader = new THREE.TextureLoader();
-        const gtjaiTexture = loader.load('https://www.gtjai.com/upload/2018-06-15/logo.png');
-        gtjaiTexture.anisotropy = 16;
+        const t1 = loader.load('/1.jpg');
+        const t2 = loader.load('/2.jpg');
+        const t4 = loader.load('/4.jpg');
+        const gtja = loader.load('/gtja.png');
 
-        return { main: texture, decal: decalTexture, gtjai: gtjaiTexture };
+        const t5 = loader.load('/5.jpeg');
+        const t6 = loader.load('/6.jpeg');
+        const t7 = loader.load('/7.jpeg');
+
+        [t1, t2, t4, gtja, t5, t6, t7].forEach(t => t.anisotropy = 16);
+
+        return {
+            main: texture,
+            decal: decalTexture,
+            gtjai: gtja,
+            clsa: t1,
+            citic: t2,
+            banner3: t4,
+            banner5: t5,
+            banner6: t6,
+            banner7: t7
+        };
     }
 
     // ==================== 創建賽道 (Figure-8) ====================
@@ -471,8 +489,9 @@ class RacingGame {
         const innerPanelGeo = new THREE.PlaneGeometry(innerChord * 1.05, 1.5);
 
         // 材質
-        const clsaMat = new THREE.MeshBasicMaterial({ map: this.brandingTextures.clsa, side: THREE.DoubleSide });
-        const citicMat = new THREE.MeshBasicMaterial({ map: this.brandingTextures.citic, side: THREE.DoubleSide });
+        // 材質 - Use Banner3 and GTJAI instead of CLSA/CITIC
+        const matA = new THREE.MeshBasicMaterial({ map: this.brandingTextures.banner3, side: THREE.DoubleSide });
+        const matB = new THREE.MeshBasicMaterial({ map: this.brandingTextures.gtjai, side: THREE.DoubleSide });
 
         for (let i = 0; i < postCount; i++) {
             const angle = (i / postCount) * Math.PI * 2;
@@ -495,7 +514,7 @@ class RacingGame {
 
             // 2. 品牌護欄板 (連接柱子)
             // 決定材質 (交替)
-            const panelMat = i % 4 < 2 ? clsaMat : citicMat;
+            const panelMat = i % 4 < 2 ? matA : matB;
 
             // 外側護欄板
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
@@ -534,7 +553,8 @@ class RacingGame {
 
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2 + (Math.PI / count); // 錯開位置
-            const texture = i % 2 === 0 ? this.brandingTextures.clsa : this.brandingTextures.citic;
+            // Use Banner 5/6 for ground decals
+            const texture = i % 2 === 0 ? this.brandingTextures.banner5 : this.brandingTextures.banner6;
 
             const mat = new THREE.MeshLambertMaterial({
                 map: texture,
@@ -569,7 +589,16 @@ class RacingGame {
         const dist = this.trackRadius + 22; // 賽道外側
 
         locations.forEach((angle, index) => {
-            const texture = index % 2 === 0 ? this.brandingTextures.clsa : this.brandingTextures.citic;
+            // Cycle through available banners (Removed CLSA/CITIC)
+            const banners = [
+                this.brandingTextures.banner3,
+                this.brandingTextures.gtjai,
+                this.brandingTextures.banner5,
+                this.brandingTextures.banner6,
+                this.brandingTextures.banner7
+            ];
+
+            const texture = banners[index % banners.length];
             const group = new THREE.Group();
 
             // 位置
