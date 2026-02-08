@@ -76,6 +76,9 @@ class RacingGame {
         // ==================== 響應式處理 ====================
         window.addEventListener('resize', () => this.onResize());
 
+        // ==================== 音效初始化 ====================
+        this.soundManager = new SoundManager();
+
         // ==================== 開始動畫循環 ====================
         this.animate();
 
@@ -179,7 +182,8 @@ class RacingGame {
             banner3: t4,
             banner5: t5,
             banner6: t6,
-            banner7: t7
+            banner7: t7,
+            allBanners: [t1, t2, t4, gtja, t5, t6, t7]
         };
     }
 
@@ -419,11 +423,13 @@ class RacingGame {
 
         // Board
         const boardGeo = new THREE.BoxGeometry(20, 8, 1);
+        // Select random banner for crossover billboard
+        const randTex = this.brandingTextures.allBanners[Math.floor(Math.random() * this.brandingTextures.allBanners.length)];
         const boardMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
-            map: this.brandingTextures.main,
+            map: randTex,
             emissive: 0xffffff,
-            emissiveMap: this.brandingTextures.main,
+            emissiveMap: randTex,
             emissiveIntensity: 0.5
         });
         const board = new THREE.Mesh(boardGeo, boardMat);
@@ -489,9 +495,11 @@ class RacingGame {
         const innerPanelGeo = new THREE.PlaneGeometry(innerChord * 1.05, 1.5);
 
         // 材質
-        // 材質 - Use Banner3 and GTJAI instead of CLSA/CITIC
-        const matA = new THREE.MeshBasicMaterial({ map: this.brandingTextures.banner3, side: THREE.DoubleSide });
-        const matB = new THREE.MeshBasicMaterial({ map: this.brandingTextures.gtjai, side: THREE.DoubleSide });
+        const borderBanners = this.brandingTextures.allBanners;
+
+        // Pre-create materials for checking performance (though creating inside loop is fine if count is small, caching is better)
+        // Let's create an array of materials
+        const borderMats = borderBanners.map(tex => new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
 
         for (let i = 0; i < postCount; i++) {
             const angle = (i / postCount) * Math.PI * 2;
@@ -513,8 +521,8 @@ class RacingGame {
             );
 
             // 2. 品牌護欄板 (連接柱子)
-            // 決定材質 (交替)
-            const panelMat = i % 4 < 2 ? matA : matB;
+            // Cycle through all banners
+            const panelMat = borderMats[i % borderMats.length];
 
             // 外側護欄板
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
@@ -553,8 +561,8 @@ class RacingGame {
 
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2 + (Math.PI / count); // 錯開位置
-            // Use Banner 5/6 for ground decals
-            const texture = i % 2 === 0 ? this.brandingTextures.banner5 : this.brandingTextures.banner6;
+            // Cycle all banners for ground decals
+            const texture = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
 
             const mat = new THREE.MeshLambertMaterial({
                 map: texture,
@@ -589,15 +597,8 @@ class RacingGame {
         const dist = this.trackRadius + 22; // 賽道外側
 
         locations.forEach((angle, index) => {
-            // Cycle through available banners (Removed CLSA/CITIC)
-            const banners = [
-                this.brandingTextures.banner3,
-                this.brandingTextures.gtjai,
-                this.brandingTextures.banner5,
-                this.brandingTextures.banner6,
-                this.brandingTextures.banner7
-            ];
-
+            // Cycle through available banners
+            const banners = this.brandingTextures.allBanners;
             const texture = banners[index % banners.length];
             const group = new THREE.Group();
 
@@ -1276,6 +1277,12 @@ class RacingGame {
             menu.style.display = 'none';
         }
 
+        // Start Audio Context on user gesture
+        if (this.soundManager) {
+            this.soundManager.init();
+            this.soundManager.startEngine();
+        }
+
         // 倒計時
         this.showCountdown(() => {
             this.started = true;
@@ -1361,6 +1368,11 @@ class RacingGame {
 
         // Update Car Position Physics
         this.updateCarPhysics(dt);
+
+        // Update Engine Sound
+        if (this.soundManager) {
+            this.soundManager.updateEngine(this.carSpeed, this.maxSpeed);
+        }
     }
 
     updateCarPhysics(dt) {
@@ -1618,4 +1630,85 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => new RacingGame());
 } else {
     new RacingGame();
+}
+
+// ==================== 音效管理器 ====================
+class SoundManager {
+    constructor() {
+        this.context = null;
+        this.masterGain = null;
+        this.engineOsc = null;
+        this.engineGain = null;
+        this.initialized = false;
+        this.started = false;
+    }
+
+    init() {
+        if (this.initialized) return;
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.context = new AudioContext();
+
+        this.masterGain = this.context.createGain();
+        this.masterGain.gain.value = 0.5;
+        this.masterGain.connect(this.context.destination);
+
+        this.initialized = true;
+    }
+
+    startEngine() {
+        if (!this.initialized) this.init();
+        if (this.started) return;
+
+        // Engine Oscillator (Sawtooth for rough engine sound)
+        this.engineOsc = this.context.createOscillator();
+        this.engineOsc.type = 'sawtooth';
+        this.engineOsc.frequency.value = 100; // Idle RPM
+
+        // Engine Filter (Lowpass to muffle the harsh sawtooth)
+        this.engineFilter = this.context.createBiquadFilter();
+        this.engineFilter.type = 'lowpass';
+        this.engineFilter.frequency.value = 400;
+
+        // Engine Gain
+        this.engineGain = this.context.createGain();
+        this.engineGain.gain.value = 0.1;
+
+        // Connections
+        this.engineOsc.connect(this.engineFilter);
+        this.engineFilter.connect(this.engineGain);
+        this.engineGain.connect(this.masterGain);
+
+        this.engineOsc.start();
+        this.started = true;
+    }
+
+    updateEngine(speed, maxSpeed) {
+        if (!this.started) return;
+
+        const speedRatio = Math.abs(speed) / maxSpeed;
+
+        // Pitch modulation
+        // Idle: 80Hz, Max Redline: 400Hz
+        const targetFreq = 80 + (speedRatio * 320);
+        this.engineOsc.frequency.setTargetAtTime(targetFreq, this.context.currentTime, 0.1);
+
+        // Filter modulation (opens up as you speed up)
+        const targetFilter = 400 + (speedRatio * 1000);
+        this.engineFilter.frequency.setTargetAtTime(targetFilter, this.context.currentTime, 0.1);
+
+        // Volume wobble (tremolo) based on speed for realism? 
+        // Or just volume increase
+        // Let's add a slight random flutter or just keep it simple.
+        this.engineGain.gain.setTargetAtTime(0.1 + (speedRatio * 0.2), this.context.currentTime, 0.1);
+    }
+
+    stopEngine() {
+        if (this.engineOsc) {
+            this.engineOsc.stop();
+            this.engineOsc.disconnect();
+            this.engineOsc = null;
+        }
+        this.started = false;
+    }
 }
