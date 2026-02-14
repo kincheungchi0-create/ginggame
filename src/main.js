@@ -144,6 +144,7 @@ class RacingGame {
             left: false,
             right: false
         };
+        this.mobileAutoAccelerate = false;
 
         // ==================== 初始化各個組件 ====================
         this.brandingTextures = this.createBrandingTextures();
@@ -1211,7 +1212,7 @@ class RacingGame {
         // 設置初始位置 - Use getPoint(0)
         const startPos = this.trackCurve ? this.trackCurve.getPoint(0) : new THREE.Vector3(0, 0, 0);
         this.car.position.copy(startPos);
-        // this.car.position.y += 0.5; // Removed to lower car to ground
+        this.car.position.y += 1.0; // Raise slightly to avoid clipping ground
         this.car.rotation.order = 'YXZ'; // Important for slope
 
         // Initial rotation: look at tangent
@@ -1220,8 +1221,6 @@ class RacingGame {
             this.car.lookAt(startPos.clone().add(t));
             this.carAngle = this.car.rotation.y;
         }
-        this.car.rotation.y = 0;  // 車頭朝向 +Z
-        this.carAngle = 0;
 
         this.scene.add(this.car);
 
@@ -1678,13 +1677,18 @@ class RacingGame {
             this.soundManager.startEngine();
         }
 
+        // Ensure game has focus for keyboard input
+        window.focus();
+
         // 倒計時
         this.showCountdown(() => {
+            console.log("Countdown finished, GAME START!");
             this.started = true;
             this.clock.start();
         });
     }
 
+    // ==================== 倒計時 ====================
     // ==================== 倒計時 ====================
     showCountdown(callback) {
         const overlay = document.createElement('div');
@@ -1704,24 +1708,34 @@ class RacingGame {
             text-shadow: 0 0 30px #00ff88;
             z-index: 1000;
             pointer-events: none;
+            transition: transform 0.2s;
         `;
         document.body.appendChild(overlay);
 
         let count = 3;
-        const countInterval = setInterval(() => {
-            overlay.textContent = count > 0 ? count : 'GO!';
-            overlay.style.transform = 'scale(1.5)';
-            setTimeout(() => overlay.style.transform = 'scale(1)', 200);
 
-            if (count <= 0) {
-                clearInterval(countInterval);
+        const updateCount = () => {
+            if (count > 0) {
+                overlay.textContent = count;
+                overlay.style.transform = 'scale(1.5)';
+                setTimeout(() => overlay.style.transform = 'scale(1)', 100);
+                count--;
+            } else {
+                overlay.textContent = 'GO!';
+                overlay.style.transform = 'scale(1.5)';
+                setTimeout(() => overlay.style.transform = 'scale(1)', 100);
+
+                clearInterval(this.countInterval);
                 setTimeout(() => {
                     overlay.remove();
-                    callback();
-                }, 500);
+                    if (callback) callback();
+                }, 800);
             }
-            count--;
-        }, 1000);
+        };
+
+        // Run immediately
+        updateCount();
+        this.countInterval = setInterval(updateCount, 1000);
     }
 
     // ==================== 暫停切換 ====================
@@ -1811,37 +1825,55 @@ class RacingGame {
                     bestT = t;
                 }
             }
-            this.carT = bestT;
-
-            const curvePt = this.trackCurve.getPointAt(this.carT);
-
-            // Constrain width
-            const limit = this.trackWidth / 2 - 2; // Margin for car size
-            const distFromCurve = Math.sqrt(minDistSq); // XZ distance
-
-            if (distFromCurve > limit) {
-                // Determine direction from curve to car (XZ only)
-                const dx = nextPos.x - curvePt.x;
-                const dz = nextPos.z - curvePt.z;
-                const angle = Math.atan2(dz, dx); // Angle from curve center to car
-
-                // Clamp position
-                nextPos.x = curvePt.x + Math.cos(angle) * limit;
-                nextPos.z = curvePt.z + Math.sin(angle) * limit;
-
-                // Reduce speed slightly on wall hit
-                this.carSpeed *= 0.95;
-            }
-
-            // Apply XZ update
-            this.car.position.x = nextPos.x;
-            this.car.position.z = nextPos.z;
-
-            // 3. Update Y Position (Raycast + Fallback)
-            this.updateCarHeight(curvePt);
         }
 
+        // Check for lap completion
+        // If we jumped from high T (e.g. 0.95) to low T (e.g. 0.05), we completed a lap forward
+        if (this.carT > 0.9 && bestT < 0.1) {
+            this.lap++;
+            if (this.lap > this.maxLaps) {
+                this.lap = this.maxLaps;
+                this.gameFinished();
+            }
+        }
+        // If we went backward across finish line (0.05 -> 0.95), decrement lap?
+        // Usually not needed unless we want to prevent cheating. 
+        // Simple check: don't decrement below 1.
+        else if (this.carT < 0.1 && bestT > 0.9) {
+            if (this.lap > 1) this.lap--;
+        }
+
+        this.carT = bestT;
+
+        const curvePt = this.trackCurve.getPointAt(this.carT);
+
+        // Constrain width
+        const limit = this.trackWidth / 2 - 2; // Margin for car size
+        const distFromCurve = Math.sqrt(minDistSq); // XZ distance
+
+        if (distFromCurve > limit) {
+            // Determine direction from curve to car (XZ only)
+            const dx = nextPos.x - curvePt.x;
+            const dz = nextPos.z - curvePt.z;
+            const angle = Math.atan2(dz, dx); // Angle from curve center to car
+
+            // Clamp position
+            nextPos.x = curvePt.x + Math.cos(angle) * limit;
+            nextPos.z = curvePt.z + Math.sin(angle) * limit;
+
+            // Reduce speed slightly on wall hit
+            this.carSpeed *= 0.95;
+        }
+
+        // Apply updates
+        this.car.position.x = nextPos.x;
+        this.car.position.z = nextPos.z;
+
+        // 3. Update Y Position (Raycast + Fallback)
+        this.updateCarHeight(curvePt);
+
         // 4. Update Rotation
+        // We set carAngle based on rotation.y to keep it in sync
         this.car.rotation.y = this.carAngle;
 
         // Wheels
@@ -1864,16 +1896,10 @@ class RacingGame {
         let validHit = null;
 
         if (hits.length > 0) {
-            // Find the hit that is closest to our expected curve height
-            // This prevents jumping to the bridge when we are below it, or falling through when on top
             let minDiff = Infinity;
-
             for (const hit of hits) {
                 // Check if this hit is plausible relative to curve height
-                // The track thickness is small, elevation differences at crossing are large (~15 units)
                 const diff = Math.abs(hit.point.y - curvePt.y);
-
-                // Allow some tolerance for banking/slopes, but reject the other layer
                 if (diff < 8 && diff < minDiff) {
                     minDiff = diff;
                     validHit = hit;
@@ -1883,7 +1909,7 @@ class RacingGame {
 
         if (validHit) {
             const hit = validHit;
-            const targetY = hit.point.y; // Adjusted for ground-level origin
+            const targetY = hit.point.y;
             this.car.position.y += (targetY - this.car.position.y) * 0.5; // Faster response
 
             // Align to normal
@@ -1896,13 +1922,11 @@ class RacingGame {
             targetRot.lookAt(targetRot.position.clone().add(fwdProj));
             this.car.quaternion.slerp(targetRot.quaternion, 0.2);
         } else {
-            // Raycast missed or all hits invalid
-            // Use curve height + offset
-            const targetY = curvePt.y; // Adjusted for ground-level origin
-            // Snap faster if we lost tracking
+            // Fallback
+            const targetY = curvePt.y;
             this.car.position.y = targetY;
 
-            // Reset rotation to flat if flying
+            // Reset rotation
             const targetRot = new THREE.Object3D();
             targetRot.position.copy(this.car.position);
             const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
@@ -1910,9 +1934,6 @@ class RacingGame {
             this.car.quaternion.slerp(targetRot.quaternion, 0.1);
         }
     }
-
-    // Deprecated
-    keepCarOnTrack() { }
 
     resetCar() {
         this.carSpeed = 0;
@@ -1928,41 +1949,29 @@ class RacingGame {
             this.carAngle = Math.atan2(tangent.x, tangent.z);
 
             // Reset Physics
-            this.car.rotation.x = 0;
-            this.car.rotation.z = 0;
+            if (this.car) {
+                this.car.rotation.x = 0;
+                this.car.rotation.z = 0;
+            }
         } else {
             this.car.position.set(0, 5, 0);
         }
     }
 
-    // ==================== 保持車輛在賽道上 (Updated for Figure-8) ====================
-    keepCarOnTrack() {
-        // Since we use Raycast for ground, "Off Track" means raycast missed (handled above)
-        // Or we can check distance to curve.
+    keepCarOnTrack() { }
 
-        // This function was enforcing circular boundary. Remove it or replace.
-        // For Figure 8, boundaries are complex. 
-        // We rely on the visual track width (mesh). 
-        // If raycast fails, we fall.
-    }
-
-    // ==================== 更新相機 ====================
     updateCamera() {
-        // 第三人稱跟隨相機
         const cameraDistance = 12;
         const cameraHeight = 6;
 
-        // 相機在車輛後方 (車輛前方是 +sin, +cos，所以後方是相反)
         const idealX = this.car.position.x - Math.sin(this.carAngle) * cameraDistance;
         const idealZ = this.car.position.z - Math.cos(this.carAngle) * cameraDistance;
         const idealY = this.car.position.y + cameraHeight;
 
-        // 平滑相機移動
         this.camera.position.x += (idealX - this.camera.position.x) * 0.1;
         this.camera.position.z += (idealZ - this.camera.position.z) * 0.1;
         this.camera.position.y += (idealY - this.camera.position.y) * 0.1;
 
-        // 看向車輛前方一點
         const lookAtPoint = new THREE.Vector3(
             this.car.position.x + Math.sin(this.carAngle) * 5,
             this.car.position.y + 1,
@@ -1971,7 +1980,6 @@ class RacingGame {
         this.camera.lookAt(lookAtPoint);
     }
 
-    // ==================== 更新 HUD ====================
     updateHUD() {
         this.updateMinimap();
 
@@ -1997,6 +2005,58 @@ class RacingGame {
         }
     }
 
+    gameFinished() {
+        this.started = false;
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #00ff88;
+            font-family: 'Orbitron', sans-serif;
+            z-index: 2000;
+        `;
+
+        const title = document.createElement('h1');
+        title.textContent = 'FINISHED!';
+        title.style.fontSize = '80px';
+        title.style.textShadow = '0 0 20px #00ff88';
+
+        const time = document.createElement('h2');
+        time.textContent = `Time: ${this.timeElement.textContent}`;
+        time.style.color = '#ffffff';
+        time.style.marginTop = '20px';
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Play Again';
+        btn.style.cssText = `
+            margin-top: 50px;
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+        `;
+        btn.onclick = () => location.reload();
+
+        overlay.appendChild(title);
+        overlay.appendChild(time);
+        overlay.appendChild(btn);
+        document.body.appendChild(overlay);
+
+        if (this.soundManager) this.soundManager.stopEngine();
+    }
     // ==================== 視窗大小調整 ====================
     onResize() {
         this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -2031,5 +2091,3 @@ if (document.readyState === 'loading') {
 } else {
     new RacingGame();
 }
-
-
