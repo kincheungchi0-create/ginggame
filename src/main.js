@@ -80,6 +80,124 @@ class SoundManager {
         this.started = false;
     }
 }
+// ==================== NPC 競爭者 ====================
+class BotCar {
+    constructor(scene, trackCurve, trackWidth, color = 0xff3333, startT = 0, sideOffset = 0) {
+        this.scene = scene;
+        this.trackCurve = trackCurve;
+        this.trackWidth = trackWidth;
+        this.carT = startT;
+        this.sideOffset = sideOffset;
+        this.carSpeed = 0;
+        this.maxSpeed = 30 + Math.random() * 10;
+        this.acceleration = 15;
+        this.trackLength = this.trackCurve.getLength();
+
+        this.mesh = this.createMesh(color);
+        this.scene.add(this.mesh);
+
+        this.wheels = [];
+        this.mesh.traverse(obj => {
+            if (obj.name === 'wheel') this.wheels.push(obj);
+        });
+    }
+
+    createMesh(color) {
+        const group = new THREE.Group();
+        // Body
+        const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 4.5);
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        group.add(body);
+
+        // Cabin
+        const cabinGeo = new THREE.BoxGeometry(1.8, 0.6, 2);
+        const cabinMat = new THREE.MeshStandardMaterial({
+            color: 0x111122,
+            metalness: 0.9
+        });
+        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+        cabin.position.set(0, 1.1, -0.3);
+        group.add(cabin);
+
+        // Windshield
+        const windshieldGeo = new THREE.BoxGeometry(1.7, 0.5, 0.1);
+        const windshieldMat = new THREE.MeshStandardMaterial({
+            color: 0x88ccff,
+            metalness: 0.1,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.5
+        });
+        const windshield = new THREE.Mesh(windshieldGeo, windshieldMat);
+        windshield.position.set(0, 1.1, 0.7);
+        windshield.rotation.x = 0.3;
+        group.add(windshield);
+
+        // Wheels
+        const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 12);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const wheelPositions = [
+            { x: -1.2, y: 0.55, z: 1.3 }, { x: 1.2, y: 0.55, z: 1.3 },
+            { x: -1.2, y: 0.55, z: -1.3 }, { x: 1.2, y: 0.55, z: -1.3 }
+        ];
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.name = 'wheel';
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(pos.x, pos.y, pos.z);
+            group.add(wheel);
+        });
+
+        // Lights
+        const lightGeo = new THREE.BoxGeometry(0.4, 0.2, 0.1);
+        const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffcc });
+        const leftHead = new THREE.Mesh(lightGeo, headLightMat);
+        leftHead.position.set(-0.7, 0.6, 2.3);
+        group.add(leftHead);
+        const rightHead = new THREE.Mesh(lightGeo, headLightMat);
+        rightHead.position.set(0.7, 0.6, 2.3);
+        group.add(rightHead);
+
+        return group;
+    }
+
+    update(dt, started) {
+        if (!started) return;
+
+        this.carSpeed += this.acceleration * dt;
+        if (this.carSpeed > this.maxSpeed) this.carSpeed = this.maxSpeed;
+
+        // Move along track curve
+        this.carT += (this.carSpeed * dt) / this.trackLength;
+        if (this.carT > 1) this.carT -= 1;
+
+        const pos = this.trackCurve.getPointAt(this.carT);
+        const tangent = this.trackCurve.getTangentAt(this.carT).normalize();
+        const up = new THREE.Vector3(0, 1, 0);
+        const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+
+        // Apply position
+        this.mesh.position.copy(pos).add(side.clone().multiplyScalar(this.sideOffset));
+        this.mesh.position.y += 0.6;
+
+        // Fix Orientation: Look forward relative to CURRENT position
+        const lookTarget = this.mesh.position.clone().add(tangent);
+        this.mesh.lookAt(lookTarget);
+
+        // Rotate wheels
+        const wheelRotation = this.carSpeed * dt * 0.35;
+        this.wheels.forEach(wheel => {
+            wheel.rotation.x += wheelRotation;
+        });
+    }
+}
 
 /**
  * 🏎️ HYPERION RACING - Clean 3D Racing Game
@@ -136,6 +254,7 @@ class RacingGame {
         this.maxSpeed = 50; // Very slow speed for easy control
         this.acceleration = 25; // Gentle acceleration
         this.handling = 2.5;
+        this.bots = [];
 
         // ==================== 輸入狀態 ====================
         this.keys = {
@@ -154,6 +273,7 @@ class RacingGame {
         this.createEnvironment();
         this.setupInput();
         this.createHUD();
+        this.createBots();
 
         // ==================== 響應式處理 ====================
         window.addEventListener('resize', () => this.onResize());
@@ -1228,6 +1348,33 @@ class RacingGame {
         this.camera.position.set(this.trackRadius, 6, -10 - 12);  // 車輛後方 12 單位
     }
 
+    // ==================== 創建 NPC 競爭者 ====================
+    createBots() {
+        if (!this.trackCurve) return;
+
+        // NPC 1 - 紅色車輛
+        const bot1 = new BotCar(
+            this.scene,
+            this.trackCurve,
+            this.trackWidth,
+            0xff3333, // 紅色
+            0.02,     // 起點稍微前方
+            -5        // 賽道右側
+        );
+
+        // NPC 2 - 綠色車輛
+        const bot2 = new BotCar(
+            this.scene,
+            this.trackCurve,
+            this.trackWidth,
+            0x33ff33, // 綠色
+            0.01,     // 起點稍微前方
+            5         // 賽道左側
+        );
+
+        this.bots.push(bot1, bot2);
+    }
+
     // ==================== 創建環境 ====================
     createEnvironment() {
         // 地面
@@ -1481,6 +1628,7 @@ class RacingGame {
             switch (e.key.toLowerCase()) {
                 case 'w':
                 case 'arrowup':
+                    console.log("Forward Key Pressed");
                     this.keys.forward = true;
                     break;
                 case 's':
@@ -1681,10 +1829,12 @@ class RacingGame {
         window.focus();
 
         // 倒計時
+        // 倒計時
         this.showCountdown(() => {
             console.log("Countdown finished, GAME START!");
             this.started = true;
             this.clock.start();
+            console.log("Game Clock Started. Initial Time:", this.gameTime);
         });
     }
 
@@ -1794,14 +1944,16 @@ class RacingGame {
         nextPos.x += moveX;
         nextPos.z += moveZ;
 
+        let bestT = this.carT;
+        let minDistSq = 0;
+
         // 2. Track Constraint (Keep on track)
         // Find the closest point on curve near current carT
         // We assume the car moves forward/backward along the track mostly
         // Optimize: scan small window around carT
         if (this.trackCurve && this.trackLength > 0) {
             const range = 0.05; // Search range (5% of track)
-            let bestT = this.carT;
-            let minDistSq = Infinity;
+            minDistSq = Infinity;
             const samples = 20;
 
             // Search direction based on speed to optimize
@@ -1980,7 +2132,7 @@ class RacingGame {
         this.camera.lookAt(lookAtPoint);
     }
 
-    updateHUD() {
+    updateHUD(dt) {
         this.updateMinimap();
 
         // 速度
@@ -1996,7 +2148,10 @@ class RacingGame {
 
         // 時間
         if (this.started && this.timeElement) {
-            this.gameTime += this.clock.getDelta();
+            // Use dt passed from animate loop to accumulate time
+            // Do NOT call getDelta() here as it resets the clock for the next frame
+            this.gameTime += dt;
+
             const minutes = Math.floor(this.gameTime / 60);
             const seconds = Math.floor(this.gameTime % 60);
             const ms = Math.floor((this.gameTime % 1) * 100);
@@ -2078,9 +2233,12 @@ class RacingGame {
             if (this.skyBannerGroup) {
                 this.skyBannerGroup.rotation.y += dt * 0.05; // Slow rotation
             }
+
+            // Update bots
+            this.bots.forEach(bot => bot.update(dt, this.started));
         }
 
-        this.updateHUD();
+        this.updateHUD(dt);
         this.renderer.render(this.scene, this.camera);
     }
 }

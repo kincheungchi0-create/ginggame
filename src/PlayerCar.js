@@ -60,7 +60,7 @@ export class PlayerCar extends Car {
         // Drift Logic
         if (this.input.keys.space && !this.isDrifting && Math.abs(steerInput) > 0.1) {
             // Start Drift
-            this.startDrif(steerInput);
+            this.startDrift(steerInput);
         } else if (!this.input.keys.space && this.isDrifting) {
             // End Drift
             this.endDrift();
@@ -91,7 +91,7 @@ export class PlayerCar extends Car {
         this.setInputs(engineForce, steerValue, brakeForce);
     }
 
-    startDrif(dir) {
+    startDrift(dir) {
         this.isDrifting = true;
         this.driftDirection = dir > 0 ? 1 : -1;
         this.driftTime = 0;
