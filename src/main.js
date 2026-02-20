@@ -211,18 +211,32 @@ class BotCar {
         }
     }
 
-    update(dt, started, leaderProgress) {
+    update(dt, started, leaderProgress, rank) {
         if (!started) return;
 
         let effectiveMaxSpeed = this.maxSpeed;
         let effectiveAcceleration = this.acceleration;
+
+        // 領先減速 - 前三名大幅減速
+        if (rank !== undefined) {
+            if (rank === 1) {
+                effectiveMaxSpeed *= 0.5;  // 第一名減速 50%
+                effectiveAcceleration *= 0.5;
+            } else if (rank === 2) {
+                effectiveMaxSpeed *= 0.65; // 第二名減速 35%
+                effectiveAcceleration *= 0.65;
+            } else if (rank === 3) {
+                effectiveMaxSpeed *= 0.8;  // 第三名減速 20%
+                effectiveAcceleration *= 0.8;
+            }
+        }
 
         // 落後加速 - 越落後速度越快
         if (leaderProgress !== undefined) {
             const myProgress = this.lap + this.carT;
             const gap = leaderProgress - myProgress;
             if (gap > 0.05) {
-                const catchUpFactor = 1 + Math.min(gap * 2, 0.6); // 最多加速 60%
+                const catchUpFactor = 1 + Math.min(gap * 2, 0.6);
                 effectiveMaxSpeed *= catchUpFactor;
                 effectiveAcceleration *= catchUpFactor;
             }
@@ -2612,16 +2626,26 @@ class RacingGame {
                 this.skyBannerGroup.rotation.y += dt * 0.05; // Slow rotation
             }
 
-            // 計算領先者進度用於落後加速
-            let leaderProgress = this.lap + this.carT;
-            this.bots.forEach(bot => {
-                const bp = bot.lap + bot.carT;
-                if (bp > leaderProgress) leaderProgress = bp;
+            // 計算領先者進度和各 NPC 排名
+            const playerProgress = this.lap + this.carT;
+            let leaderProgress = playerProgress;
+
+            // 收集所有進度
+            const botProgresses = this.bots.map(bot => ({
+                bot,
+                progress: bot.lap + bot.carT
+            }));
+            botProgresses.forEach(bp => {
+                if (bp.progress > leaderProgress) leaderProgress = bp.progress;
             });
+
+            // 按進度排序（高到低）計算排名
+            botProgresses.sort((a, b) => b.progress - a.progress);
 
             // Update bots
             this.bots.forEach(bot => {
-                bot.update(dt, this.started, leaderProgress);
+                const botRank = botProgresses.findIndex(bp => bp.bot === bot) + 1;
+                bot.update(dt, this.started, leaderProgress, botRank);
 
                 // 為 NPC 進行高度修正 (Raycast)
                 if (this.trackMesh && this.raycaster) {
