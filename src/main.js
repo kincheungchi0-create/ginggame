@@ -2533,26 +2533,22 @@ class RacingGame {
                 const dist = Math.sqrt(distSq) || 0.1;
                 const nx = dx / dist;
                 const nz = dz / dist;
-                const force = (minDist - dist) * 2.5; // 大幅增加力量係數
+                const force = (minDist - dist) * 0.8; // 輕微推開
 
-                // 強制反彈偏移 (Knockback)
+                // 輕微反彈偏移
                 this.pushOffset.x += nx * force;
                 this.pushOffset.z += nz * force;
                 bot.pushOffset.x -= nx * force;
                 bot.pushOffset.z -= nz * force;
 
-                // 劇烈速度損耗
-                if (Math.abs(this.carSpeed) > 10) {
-                    this.carSpeed *= -0.6; // 反向彈開更猛
-                } else {
-                    this.carSpeed = -8; // 給予一個基礎的反向速度
-                }
-                bot.carSpeed *= 0.6; // NPC 被撞後速度保留更多 (原 0.2)，更難對付
+                // 輕微速度損耗
+                this.carSpeed *= 0.85; // 保留 85% 速度
+                bot.carSpeed *= 0.9;   // NPC 保留 90% 速度
 
-                // 增加相機震動 (震動幅度加大)
-                this.camera.position.x += (Math.random() - 0.5) * 3;
-                this.camera.position.y += (Math.random() - 0.5) * 3;
-                this.camera.position.z += (Math.random() - 0.5) * 3;
+                // 輕微相機震動
+                this.camera.position.x += (Math.random() - 0.5) * 0.5;
+                this.camera.position.y += (Math.random() - 0.5) * 0.5;
+                this.camera.position.z += (Math.random() - 0.5) * 0.5;
 
                 console.log("COLLISION! Bouncing...");
             }
@@ -2571,15 +2567,15 @@ class RacingGame {
                     const dist = Math.sqrt(distSq) || 0.1;
                     const nx = dx / dist;
                     const nz = dz / dist;
-                    const force = (minDist - dist) * 2.0; // NPC 互撞也增加力量
+                    const force = (minDist - dist) * 0.6; // 輕微推開
 
                     botA.pushOffset.x += nx * force;
                     botA.pushOffset.z += nz * force;
                     botB.pushOffset.x -= nx * force;
                     botB.pushOffset.z -= nz * force;
 
-                    botA.carSpeed *= 0.8; // NPC 互撞速度損失大幅降低 (原 0.6)
-                    botB.carSpeed *= 0.8;
+                    botA.carSpeed *= 0.95; // NPC 互撞幾乎不減速
+                    botB.carSpeed *= 0.95;
                 }
             }
         }
