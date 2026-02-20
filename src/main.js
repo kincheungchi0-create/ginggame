@@ -275,8 +275,8 @@ class RacingGame {
     init() {
         // ==================== 場景設置 ====================
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1a2e);
-        this.scene.fog = new THREE.Fog(0x1a1a2e, 100, 500);
+        this.scene.background = new THREE.Color(0x0a0a1a);
+        this.scene.fog = new THREE.Fog(0x0a0a1a, 200, 1200);
 
         // ==================== 相機設置 ====================
         this.camera = new THREE.PerspectiveCamera(
@@ -1544,25 +1544,26 @@ class RacingGame {
 
     // ==================== 創建環境 ====================
     createEnvironment() {
-        // 地面 (擴大以容納新賽道)
-        const groundGeo = new THREE.PlaneGeometry(3000, 3000);
+        // 地面 (擴大以完全覆蓋新賽道範圍，避免看到邊緣)
+        const groundGeo = new THREE.PlaneGeometry(6000, 6000);
         const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x1a2a1a,
+            color: 0x0d1a0d,
             roughness: 1,
             metalness: 0
         });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1;
+        ground.position.y = -0.5;
         ground.receiveShadow = true;
         this.scene.add(ground);
 
-        // 天空球
-        const skyGeo = new THREE.SphereGeometry(400, 32, 32);
+        // 天空球 (擴大到匹配霧氣和相機遠裁剪面)
+        const skyGeo = new THREE.SphereGeometry(900, 32, 32);
         const skyMat = new THREE.ShaderMaterial({
             uniforms: {
-                topColor: { value: new THREE.Color(0x0a0a20) },
-                bottomColor: { value: new THREE.Color(0x2a1a40) }
+                topColor: { value: new THREE.Color(0x050510) },
+                bottomColor: { value: new THREE.Color(0x0a0a1a) },
+                horizonColor: { value: new THREE.Color(0x15102a) }
             },
             vertexShader: `
                 varying vec3 vWorldPosition;
@@ -1575,10 +1576,17 @@ class RacingGame {
             fragmentShader: `
                 uniform vec3 topColor;
                 uniform vec3 bottomColor;
+                uniform vec3 horizonColor;
                 varying vec3 vWorldPosition;
                 void main() {
                     float h = normalize(vWorldPosition).y;
-                    gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
+                    vec3 col;
+                    if (h > 0.0) {
+                        col = mix(horizonColor, topColor, h);
+                    } else {
+                        col = mix(horizonColor, bottomColor, -h);
+                    }
+                    gl_FragColor = vec4(col, 1.0);
                 }
             `,
             side: THREE.BackSide
