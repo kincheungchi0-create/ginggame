@@ -1112,7 +1112,7 @@ class RacingGame {
         this.scene.add(this.skyBannerGroup);
 
         const count = 16; // Number of floating banners
-        const height = 80; // Higher in the sky
+        const height = 120; // Higher in the sky
 
         const curvePoints = this.trackCurve.getSpacedPoints(count);
 
@@ -1126,8 +1126,8 @@ class RacingGame {
             const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
 
             // Default size
-            const baseHeight = 20;
-            const baseWidth = 35; // Default 16:9 approx
+            const baseHeight = 40;
+            const baseWidth = 70;
 
             // Mesh with dynamic aspect ratio
             const geo = new THREE.PlaneGeometry(1, 1); // Unit square, will scale
@@ -1251,7 +1251,7 @@ class RacingGame {
             // Usually logos are wide.
             // Let's keep previous scaling logic but apply to X/Y on floor.
 
-            const baseSize = 10;
+            const baseSize = 20;
             if (tex.image && tex.image.width) {
                 const aspect = tex.image.width / tex.image.height;
                 // If aspect > 1 (landscape), make it wide across track
@@ -1279,15 +1279,15 @@ class RacingGame {
                 let h = baseSize;
 
                 // Constrain width
-                if (w > 16) {
-                    const ratio = 16 / w;
-                    w = 16;
+                if (w > 32) {
+                    const ratio = 32 / w;
+                    w = 32;
                     h = h * ratio;
                 }
 
                 banner.scale.set(w, h, 1);
             } else {
-                banner.scale.set(16, 8, 1);
+                banner.scale.set(32, 16, 1);
             }
 
             // Lift slightly above ground
@@ -1361,10 +1361,10 @@ class RacingGame {
             group.rotation.y = Math.random() * Math.PI * 2;
 
             // 1. Pole
-            const poleGeo = new THREE.CylinderGeometry(0.2, 0.2, 6);
+            const poleGeo = new THREE.CylinderGeometry(0.3, 0.3, 10);
             const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
             const pole = new THREE.Mesh(poleGeo, poleMat);
-            pole.position.y = 3;
+            pole.position.y = 5;
             group.add(pole);
 
             // 2. Banner Board
@@ -1378,12 +1378,12 @@ class RacingGame {
             // Aspect
             if (tex.image && tex.image.width) {
                 const aspect = tex.image.width / tex.image.height;
-                board.scale.set(4 * aspect, 4, 1);
+                board.scale.set(8 * aspect, 8, 1);
             } else {
-                board.scale.set(6, 4, 1);
+                board.scale.set(12, 8, 1);
             }
 
-            board.position.y = 5; // Top of pole
+            board.position.y = 9; // Top of pole
             group.add(board);
 
             this.scene.add(group);
