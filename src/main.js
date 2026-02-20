@@ -884,27 +884,27 @@ class RacingGame {
             // 護欄板 - 外側
             const outerMid = outerPos.clone().add(outerPosNext).multiplyScalar(0.5);
             const outerLen = outerPos.distanceTo(outerPosNext);
-            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.05, 1.5);
+            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.05, 4.0);
             const panelMat = borderMats[i % borderMats.length];
 
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
-            outerPanel.position.set(outerMid.x, pt.y + 1.0, outerMid.z);
+            outerPanel.position.set(outerMid.x, pt.y + 2.5, outerMid.z);
             // 面向賽道內側
             const outerDir = new THREE.Vector3().subVectors(outerPosNext, outerPos).normalize();
             const outerLook = outerPanel.position.clone().add(side);
-            outerPanel.lookAt(outerLook.x, pt.y + 1.0, outerLook.z);
+            outerPanel.lookAt(outerLook.x, pt.y + 2.5, outerLook.z);
             this.scene.add(outerPanel);
 
             // 護欄板 - 內側
             const innerMid = innerPos.clone().add(innerPosNext).multiplyScalar(0.5);
             const innerLen = innerPos.distanceTo(innerPosNext);
-            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.05, 1.5);
+            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.05, 4.0);
 
             const innerPanel = new THREE.Mesh(innerPanelGeo, panelMat);
-            innerPanel.position.set(innerMid.x, pt.y + 1.0, innerMid.z);
+            innerPanel.position.set(innerMid.x, pt.y + 2.5, innerMid.z);
             // 面向賽道外側 (反方向)
             const innerLook = innerPanel.position.clone().sub(side);
-            innerPanel.lookAt(innerLook.x, pt.y + 1.0, innerLook.z);
+            innerPanel.lookAt(innerLook.x, pt.y + 2.5, innerLook.z);
             this.scene.add(innerPanel);
         }
     }
@@ -1014,14 +1014,14 @@ class RacingGame {
 
     // ==================== 護欄柱 ====================
     createBarrierPost(x, z, color) {
-        const postGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.5, 8);
+        const postGeo = new THREE.CylinderGeometry(0.5, 0.5, 4.5, 8);
         const postMat = new THREE.MeshStandardMaterial({
             color: color,
             roughness: 0.5,
             metalness: 0.3
         });
         const post = new THREE.Mesh(postGeo, postMat);
-        post.position.set(x, 0.75, z);
+        post.position.set(x, 2.25, z);
         post.castShadow = true;
         this.scene.add(post);
     }
