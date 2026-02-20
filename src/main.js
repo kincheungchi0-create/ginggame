@@ -726,12 +726,14 @@ class RacingGame {
     createBoostPads() {
         if (!this.trackLayout) return;
 
-        const padGeo = new THREE.PlaneGeometry(8, 4);
-        // 創建黃色發光材質
+        // 載入加速帶貼圖
+        const boostTexture = new THREE.TextureLoader().load('/accelerate.png');
+        boostTexture.anisotropy = 16;
+
+        const padGeo = new THREE.PlaneGeometry(10, 6);
         const padMat = new THREE.MeshBasicMaterial({
-            color: 0xffff00,
+            map: boostTexture,
             transparent: true,
-            opacity: 0.8,
             side: THREE.DoubleSide
         });
 
@@ -741,20 +743,11 @@ class RacingGame {
             const layout = this.trackLayout[i];
             const pad = new THREE.Group();
 
-            // 主底板
+            // 主底板 - 使用 accelerate.png
             const mesh = new THREE.Mesh(padGeo, padMat);
             mesh.rotation.x = -Math.PI / 2;
-            mesh.position.y = 0.05; // 稍微高於地面
+            mesh.position.y = 0.08; // 稍微高於地面
             pad.add(mesh);
-
-            // 增加箭頭裝飾（簡單的三角形）
-            const arrowGeo = new THREE.CircleGeometry(1.5, 3);
-            const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-            const arrow = new THREE.Mesh(arrowGeo, arrowMat);
-            arrow.rotation.x = -Math.PI / 2;
-            arrow.rotation.z = Math.PI; // 指向前
-            arrow.position.y = 0.06;
-            pad.add(arrow);
 
             pad.position.copy(layout.position);
             pad.lookAt(layout.position.clone().add(layout.tangent));
