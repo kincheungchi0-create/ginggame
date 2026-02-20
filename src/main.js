@@ -1690,6 +1690,7 @@ class RacingGame {
         this.speedElement = document.getElementById('speed-value');
         this.lapElement = document.getElementById('lap-value');
         this.timeElement = document.getElementById('time-value');
+        this.rankElement = document.getElementById('rank-value');
 
         // 如果 DOM 元素不存在，創建它們
         if (!this.speedElement) {
