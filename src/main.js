@@ -669,12 +669,13 @@ class RacingGame {
         // 3. 獲取 Raycast 用的 Mesh
         this.collidableMeshes = [this.trackMesh];
 
-        // 4. 裝飾
-        this.createTrackDecorations();
-        this.createSkyBanners(); // Add sky banners
-        this.createSkyBanners(); // Add sky banners
-        this.createFloorBanners(); // Add floor banners (formerly overhead)
-        this.createTreeBanners(); // Add banners in tree area
+        // 4. 裝飾 - 創建超大護欄與標誌
+        this.createTrackBorders();
+        this.createTrackLines();
+        this.createSkyBanners();
+        this.createFloorBanners();
+        this.createTreeBanners();
+        this.createRoadDecals();
 
         // 5. 起點
         this.createStartLine();
@@ -686,70 +687,7 @@ class RacingGame {
         this.initMinimap();
     }
 
-    createTrackDecorations() {
-        if (!this.trackLayout) return;
 
-        const barrierGeo = new THREE.BoxGeometry(0.5, 1.2, 2.5);
-        const barrierMat = new THREE.MeshStandardMaterial({
-            map: this.brandingTextures.main,
-            color: 0xffffff
-        });
-
-        // Alternate material for GTJAI
-        const gtjaiMat = new THREE.MeshStandardMaterial({
-            map: this.brandingTextures.gtjai,
-            color: 0xffffff,
-            transparent: true // PNG might have transparency
-        });
-
-        const lightGeo = new THREE.SphereGeometry(0.2);
-        const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-        // 使用我們生成的 trackLayout 來放置，保證完美對齊
-        for (let i = 0; i < this.trackLayout.length; i += 2) { // 減少密度
-            const layout = this.trackLayout[i];
-            const tangent = layout.tangent;
-
-            // Perform alternate branding (every 4th barrier is GTJAI)
-            const mat = (i % 8 === 0) ? gtjaiMat : barrierMat;
-
-            // 左側護欄
-            const bLeft = new THREE.Mesh(barrierGeo, mat);
-            bLeft.position.copy(layout.pLeft);
-            bLeft.position.y += 0.6; // 放置在路面上方
-            // 面向賽道切線方向
-            bLeft.lookAt(bLeft.position.clone().add(tangent));
-            this.scene.add(bLeft);
-
-            // 右側護欄
-            const bRight = new THREE.Mesh(barrierGeo, mat);
-            bRight.position.copy(layout.pRight);
-            bRight.position.y += 0.6;
-            bRight.lookAt(bRight.position.clone().add(tangent));
-            this.scene.add(bRight);
-
-            // 調整：讓護欄稍微往內或者往外一點，避免壓在路邊緣
-            // 這裡把它們移出去一點點
-            bLeft.position.add(layout.binormal.clone().multiplyScalar(0.5));
-            bRight.position.add(layout.binormal.clone().multiplyScalar(-0.5));
-
-            // Lights (Lower frequency)
-            if (i % 10 === 0) {
-                const lLeft = new THREE.Mesh(lightGeo, lightMat);
-                lLeft.position.copy(bLeft.position);
-                lLeft.position.y += 1.2;
-                this.scene.add(lLeft);
-
-                const lRight = new THREE.Mesh(lightGeo, lightMat);
-                lRight.position.copy(bRight.position);
-                lRight.position.y += 1.2;
-                this.scene.add(lRight);
-            }
-        }
-
-        // 交叉點的大型 Logo decals
-        this.createDecals();
-    }
 
     createBoostPads() {
         if (!this.trackLayout) return;
@@ -865,72 +803,73 @@ class RacingGame {
         }
     }
 
-    // ==================== 賽道邊界與護欄 ====================
+    // ==================== 賽道邊界與超大護欄 ====================
     createTrackBorders() {
-        if (!this.trackCurve) return;
+        if (!this.trackLayout) return;
 
-        const postCount = 300; // 高密度護欄，消除間隙
+        const barrierHeight = 45; // 巨大護欄 (45 單位高)
         const halfWidth = this.trackWidth / 2 + 1;
 
         // 品牌材質
         const borderBanners = this.brandingTextures.allBanners;
         const borderMats = borderBanners.map(tex => new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
 
-        for (let i = 0; i < postCount; i++) {
-            const t = i / postCount;
-            const tNext = ((i + 1) % postCount) / postCount;
+        const lightGeo = new THREE.SphereGeometry(0.8);
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-            const pt = this.trackCurve.getPointAt(t);
-            const ptNext = this.trackCurve.getPointAt(tNext);
-            const tangent = this.trackCurve.getTangentAt(t);
+        // 使用 trackLayout，密度更高 (1200 點)
+        for (let i = 0; i < this.trackLayout.length; i++) {
+            const layout = this.trackLayout[i];
+            const nextLayout = this.trackLayout[(i + 1) % this.trackLayout.length];
 
-            // 計算賽道的橫向方向（左右）
-            const up = new THREE.Vector3(0, 1, 0);
-            const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+            const pt = layout.position;
+            const ptNext = nextLayout.position;
+            const binormal = layout.binormal;
+            const tangent = layout.tangent;
 
-            const isRed = i % 2 === 0;
+            // 外側與內側位置
+            const outerPos = pt.clone().add(binormal.clone().multiplyScalar(halfWidth));
+            const outerPosNext = ptNext.clone().add(nextLayout.binormal.clone().multiplyScalar(halfWidth));
+            const innerPos = pt.clone().sub(binormal.clone().multiplyScalar(halfWidth));
+            const innerPosNext = ptNext.clone().sub(nextLayout.binormal.clone().multiplyScalar(halfWidth));
 
-            // 外側位置
-            const outerPos = pt.clone().add(side.clone().multiplyScalar(halfWidth));
-            const outerPosNext = ptNext.clone().add(
-                new THREE.Vector3().crossVectors(this.trackCurve.getTangentAt(tNext), up).normalize().multiplyScalar(halfWidth)
-            );
+            // 每隔 4 段放一根柱子
+            if (i % 4 === 0) {
+                this.createBarrierPost(outerPos.x, outerPos.y, outerPos.z, 0xff3333);
+                this.createBarrierPost(innerPos.x, innerPos.y, innerPos.z, 0x3333ff);
+            }
 
-            // 內側位置
-            const innerPos = pt.clone().sub(side.clone().multiplyScalar(halfWidth));
-            const innerPosNext = ptNext.clone().sub(
-                new THREE.Vector3().crossVectors(this.trackCurve.getTangentAt(tNext), up).normalize().multiplyScalar(halfWidth)
-            );
-
-            // 護欄柱
-            this.createBarrierPost(outerPos.x, outerPos.z, isRed ? 0xff3333 : 0xffffff);
-            this.createBarrierPost(innerPos.x, innerPos.z, isRed ? 0x3333ff : 0xffffff);
-
-            // 護欄板 - 外側
-            const outerMid = outerPos.clone().add(outerPosNext).multiplyScalar(0.5);
-            const outerLen = outerPos.distanceTo(outerPosNext);
-            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.3, 20);
+            // 護欄板 - 寬度增加 20% 以確保完美重疊，高度大幅增加
             const panelMat = borderMats[i % borderMats.length];
 
+            // 外側板
+            const outerLen = outerPos.distanceTo(outerPosNext);
+            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.5, barrierHeight);
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
-            outerPanel.position.set(outerMid.x, pt.y + 10, outerMid.z);
-            // 面向賽道內側
-            const outerDir = new THREE.Vector3().subVectors(outerPosNext, outerPos).normalize();
-            const outerLook = outerPanel.position.clone().add(side);
-            outerPanel.lookAt(outerLook.x, pt.y + 10, outerLook.z);
+            const outerMid = outerPos.clone().add(outerPosNext).multiplyScalar(0.5);
+            outerPanel.position.set(outerMid.x, outerMid.y + barrierHeight / 2, outerMid.z);
+            outerPanel.lookAt(outerPanel.position.clone().add(binormal));
             this.scene.add(outerPanel);
 
-            // 護欄板 - 內側
-            const innerMid = innerPos.clone().add(innerPosNext).multiplyScalar(0.5);
+            // 內側板
             const innerLen = innerPos.distanceTo(innerPosNext);
-            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.3, 20);
-
+            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.5, barrierHeight);
             const innerPanel = new THREE.Mesh(innerPanelGeo, panelMat);
-            innerPanel.position.set(innerMid.x, pt.y + 10, innerMid.z);
-            // 面向賽道外側 (反方向)
-            const innerLook = innerPanel.position.clone().sub(side);
-            innerPanel.lookAt(innerLook.x, pt.y + 10, innerLook.z);
+            const innerMid = innerPos.clone().add(innerPosNext).multiplyScalar(0.5);
+            innerPanel.position.set(innerMid.x, innerMid.y + barrierHeight / 2, innerMid.z);
+            innerPanel.lookAt(innerPanel.position.clone().sub(binormal));
             this.scene.add(innerPanel);
+
+            // 頂部警示燈
+            if (i % 12 === 0) {
+                const lLeft = new THREE.Mesh(lightGeo, lightMat);
+                lLeft.position.set(outerPos.x, outerPos.y + barrierHeight, outerPos.z);
+                this.scene.add(lLeft);
+
+                const lRight = new THREE.Mesh(lightGeo, lightMat);
+                lRight.position.set(innerPos.x, innerPos.y + barrierHeight, innerPos.z);
+                this.scene.add(lRight);
+            }
         }
     }
 
@@ -1038,15 +977,16 @@ class RacingGame {
     }
 
     // ==================== 護欄柱 ====================
-    createBarrierPost(x, z, color) {
-        const postGeo = new THREE.CylinderGeometry(1.0, 1.0, 20, 8);
+    createBarrierPost(x, y, z, color) {
+        const height = 45;
+        const postGeo = new THREE.CylinderGeometry(1.2, 1.2, height, 8);
         const postMat = new THREE.MeshStandardMaterial({
             color: color,
             roughness: 0.5,
             metalness: 0.3
         });
         const post = new THREE.Mesh(postGeo, postMat);
-        post.position.set(x, 10, z);
+        post.position.set(x, y + height / 2, z);
         post.castShadow = true;
         this.scene.add(post);
     }
@@ -1100,13 +1040,8 @@ class RacingGame {
     // Old assets removal
     // createTrackLines, createTrackBorders, createRoadDecals, createApexBillboards, createStartArch, addSponsorLogo, createSponsorBillboards
     // These methods can be removed or emptied as they are replaced by new decorations
-    createTrackLines() { }
-    createTrackBorders() { }
-    createRoadDecals() { }
     createApexBillboards() { }
     createStartArch() { }
-    addSponsorLogo() { }
-    createSponsorBillboards(tex) { }
 
     // ==================== 天空懸浮廣告 ====================
     // ==================== 天空懸浮廣告 ====================
