@@ -484,28 +484,28 @@ class RacingGame {
         // 1. 生成自定義控制點路徑
         const controlPoints = [
             new THREE.Vector3(0, 0, 300),       // 起點大直道
-            new THREE.Vector3(150, 3, 300),     // 微上坡
-            new THREE.Vector3(300, 0, 280),     // 平緩右彎
-            new THREE.Vector3(450, 8, 150),     // 緩上坡彎道
-            new THREE.Vector3(500, 15, 0),      // 小丘頂
-            new THREE.Vector3(480, 10, -120),   // 緩下坡
-            new THREE.Vector3(400, 3, -250),    // 長彎道
+            new THREE.Vector3(150, 5, 300),     // 微上坡
+            new THREE.Vector3(300, 2, 280),     // 平緩右彎
+            new THREE.Vector3(450, 15, 150),    // 緩上坡彎道
+            new THREE.Vector3(500, 35, 0),      // 大丘頂
+            new THREE.Vector3(480, 20, -120),   // 下坡
+            new THREE.Vector3(400, 5, -250),    // 長彎道
             new THREE.Vector3(250, 0, -350),    // 谷底直道
-            new THREE.Vector3(100, 5, -380),    // 微上坡
-            new THREE.Vector3(-30, 10, -330),   // 緩彎
-            new THREE.Vector3(-120, 5, -230),   // 下坡彎
-            new THREE.Vector3(-200, 12, -180),  // 小丘
-            new THREE.Vector3(-300, 3, -100),   // 下降
-            new THREE.Vector3(-450, 10, 0),     // 大彎道
-            new THREE.Vector3(-400, 5, 130),    // 彎道出口
-            new THREE.Vector3(-330, 8, 220),    // 緩上坡
+            new THREE.Vector3(100, 8, -380),    // 上坡
+            new THREE.Vector3(-30, 20, -330),   // 丘陵彎
+            new THREE.Vector3(-120, 10, -230),  // 下坡彎
+            new THREE.Vector3(-200, 25, -180),  // 高丘
+            new THREE.Vector3(-300, 5, -100),   // 下降
+            new THREE.Vector3(-450, 20, 0),     // 大彎道丘
+            new THREE.Vector3(-400, 8, 130),    // 彎道出口
+            new THREE.Vector3(-330, 15, 220),   // 緩上坡
             // ===== 跳台區段 =====
-            new THREE.Vector3(-250, 2, 320),    // 接近
-            new THREE.Vector3(-200, 3, 335),    // 仍然低
-            new THREE.Vector3(-170, 18, 338),   // 上坡
-            new THREE.Vector3(-150, 22, 335),   // 跳台頂
-            new THREE.Vector3(-135, 18, 330),   // 邊緣
-            new THREE.Vector3(-110, 3, 320),    // 下降
+            new THREE.Vector3(-250, 3, 320),    // 接近
+            new THREE.Vector3(-200, 5, 335),    // 仍然低
+            new THREE.Vector3(-170, 28, 338),   // 上坡
+            new THREE.Vector3(-150, 35, 335),   // 跳台頂
+            new THREE.Vector3(-135, 28, 330),   // 邊緣
+            new THREE.Vector3(-110, 5, 320),    // 下降
             new THREE.Vector3(-70, 0, 310),     // 著陸
             new THREE.Vector3(-30, 0, 300)      // 回到起點
         ];
