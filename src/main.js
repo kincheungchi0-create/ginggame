@@ -95,7 +95,7 @@ class BotCar {
         this.pushOffset = new THREE.Vector3(); // 用於碰撞反彈偏移
         this.boostTimer = 0; // 加速器計時
         this.carVelocityY = 0;
-        this.gravity = -50; // 重力
+        this.gravity = -30; // 降低重力讓飛行時間更長
 
         this.mesh = this.createMesh(color);
         this.scene.add(this.mesh);
@@ -319,7 +319,7 @@ class RacingGame {
         this.carSpeed = 0;
         this.carAngle = 0;
         this.carVelocityY = 0; // 垂直速度
-        this.gravity = -50;    // 重力值
+        this.gravity = -30;    // 降低重力讓飛行時間更長
         this.maxSpeed = 80; // 提升玩家速度
         this.acceleration = 40; // 增加加速度
         this.handling = 3.5; // 提高轉向能力以應對高難度賽道
@@ -481,23 +481,28 @@ class RacingGame {
         // 1. 生成自定義控制點路徑
         const controlPoints = [
             new THREE.Vector3(0, 0, 300),       // 起點大直道
-            new THREE.Vector3(300, 5, 300),
-            new THREE.Vector3(500, 15, 100),    // 高速右彎上坡
-            new THREE.Vector3(450, 35, -200),   // 下坡急彎
-            new THREE.Vector3(250, 10, -350),
-            new THREE.Vector3(50, 5, -300),     // 谷底
-            new THREE.Vector3(-100, 15, -150),  // 連續彎道
-            new THREE.Vector3(-200, 20, -250),
-            new THREE.Vector3(-300, 10, -100),
-            new THREE.Vector3(-550, 30, 0),     // 高銀行彎位
-            new THREE.Vector3(-350, 15, 200),
-            // ===== 大跳台區段 - 密集控制點製造尖銳邊緣 =====
+            new THREE.Vector3(150, 8, 300),     // 微上坡
+            new THREE.Vector3(300, 0, 300),     // 下坡回平
+            new THREE.Vector3(500, 25, 100),    // 高速右彎大上坡
+            new THREE.Vector3(480, 50, -50),    // 山頂！
+            new THREE.Vector3(450, 20, -200),   // 急降下坡
+            new THREE.Vector3(300, 0, -320),    // 谷底
+            new THREE.Vector3(150, 15, -380),   // 微上坡
+            new THREE.Vector3(50, 30, -300),    // 丘陵
+            new THREE.Vector3(-50, 5, -200),    // 下降
+            new THREE.Vector3(-100, 20, -150),  // 連續起伏彎道
+            new THREE.Vector3(-200, 35, -250),  // 高丘
+            new THREE.Vector3(-300, 5, -100),   // 急降谷底
+            new THREE.Vector3(-550, 40, 0),     // 高銀行大彎
+            new THREE.Vector3(-400, 10, 150),   // 下降
+            new THREE.Vector3(-350, 25, 200),   // 又一個丘陵
+            // ===== 大跳台區段 =====
             new THREE.Vector3(-230, 3, 345),    // 低段接近
             new THREE.Vector3(-180, 4, 338),    // 仍然很低
-            new THREE.Vector3(-155, 30, 332),   // 陡坡急升！
-            new THREE.Vector3(-140, 38, 328),   // 跳台頂端
-            new THREE.Vector3(-130, 36, 325),   // 邊緣 - 開始下降
-            new THREE.Vector3(-110, 5, 318),    // 急降！車應該在空中了
+            new THREE.Vector3(-155, 35, 332),   // 陡坡急升！
+            new THREE.Vector3(-140, 45, 328),   // 跳台頂端
+            new THREE.Vector3(-130, 42, 325),   // 邊緣
+            new THREE.Vector3(-110, 5, 318),    // 急降！
             new THREE.Vector3(-70, 0, 308),     // 著陸區
             new THREE.Vector3(-30, 0, 300)      // 回到起點
         ];
@@ -508,7 +513,7 @@ class RacingGame {
         const segments = 1200; // 更長的賽道需要更多分段
 
         // 2. 自定義賽道 Mesh 生成 (Triangle Strip) - 解決扭曲問題
-        const trackWidth = 22;
+        const trackWidth = 30; // 加寬賽道
         this.trackWidth = trackWidth; // Store for usage
         const curvePoints = this.trackCurve.getSpacedPoints(segments); // Uniform spacing
 
@@ -1519,27 +1524,26 @@ class RacingGame {
     createBots() {
         if (!this.trackCurve) return;
 
-        // NPC 1 - 紅色車輛
-        const bot1 = new BotCar(
-            this.scene,
-            this.trackCurve,
-            this.trackWidth,
-            0xff3333, // 紅色
-            0.02,     // 起點稍微前方
-            -5        // 賽道右側
-        );
+        const botConfigs = [
+            { color: 0xff3333, startT: 0.02, offset: -6 },  // 紅色
+            { color: 0x33ff33, startT: 0.01, offset: 6 },   // 綠色
+            { color: 0x3388ff, startT: 0.03, offset: -3 },  // 藍色
+            { color: 0xffaa00, startT: 0.04, offset: 3 },   // 橙色
+            { color: 0xff33ff, startT: 0.05, offset: -8 },  // 紫色
+            { color: 0x00ffcc, startT: 0.06, offset: 8 },   // 青綠色
+        ];
 
-        // NPC 2 - 綠色車輛
-        const bot2 = new BotCar(
-            this.scene,
-            this.trackCurve,
-            this.trackWidth,
-            0x33ff33, // 綠色
-            0.01,     // 起點稍微前方
-            5         // 賽道左側
-        );
-
-        this.bots.push(bot1, bot2);
+        for (const cfg of botConfigs) {
+            const bot = new BotCar(
+                this.scene,
+                this.trackCurve,
+                this.trackWidth,
+                cfg.color,
+                cfg.startT,
+                cfg.offset
+            );
+            this.bots.push(bot);
+        }
     }
 
     // ==================== 創建環境 ====================
