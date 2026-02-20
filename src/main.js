@@ -513,7 +513,7 @@ class RacingGame {
         const segments = 1200; // 更長的賽道需要更多分段
 
         // 2. 自定義賽道 Mesh 生成 (Triangle Strip) - 解決扭曲問題
-        const trackWidth = 30; // 加寬賽道
+        const trackWidth = 42; // 超寬賽道
         this.trackWidth = trackWidth; // Store for usage
         const curvePoints = this.trackCurve.getSpacedPoints(segments); // Uniform spacing
 
@@ -1540,12 +1540,16 @@ class RacingGame {
         if (!this.trackCurve) return;
 
         const botConfigs = [
-            { color: 0xff3333, startT: 0.02, offset: -6 },  // 紅色
-            { color: 0x33ff33, startT: 0.01, offset: 6 },   // 綠色
-            { color: 0x3388ff, startT: 0.03, offset: -3 },  // 藍色
-            { color: 0xffaa00, startT: 0.04, offset: 3 },   // 橙色
-            { color: 0xff33ff, startT: 0.05, offset: -8 },  // 紫色
-            { color: 0x00ffcc, startT: 0.06, offset: 8 },   // 青綠色
+            { color: 0xff3333, startT: 0.02, offset: -8 },   // 紅色
+            { color: 0x33ff33, startT: 0.01, offset: 8 },    // 綠色
+            { color: 0x3388ff, startT: 0.03, offset: -4 },   // 藍色
+            { color: 0xffaa00, startT: 0.04, offset: 4 },    // 橙色
+            { color: 0xff33ff, startT: 0.05, offset: -12 },  // 紫色
+            { color: 0x00ffcc, startT: 0.06, offset: 12 },   // 青綠色
+            { color: 0xffff33, startT: 0.07, offset: -1 },   // 黃色
+            { color: 0xff6633, startT: 0.08, offset: 0 },    // 橘紅色
+            { color: 0x33ffff, startT: 0.09, offset: -15 },  // 水色
+            { color: 0xcc33ff, startT: 0.10, offset: 15 },   // 深紫色
         ];
 
         for (const cfg of botConfigs) {
