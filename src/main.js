@@ -211,15 +211,26 @@ class BotCar {
         }
     }
 
-    update(dt, started) {
+    update(dt, started, leaderProgress) {
         if (!started) return;
 
         let effectiveMaxSpeed = this.maxSpeed;
         let effectiveAcceleration = this.acceleration;
 
+        // 落後加速 - 越落後速度越快
+        if (leaderProgress !== undefined) {
+            const myProgress = this.lap + this.carT;
+            const gap = leaderProgress - myProgress;
+            if (gap > 0.05) {
+                const catchUpFactor = 1 + Math.min(gap * 2, 0.6); // 最多加速 60%
+                effectiveMaxSpeed *= catchUpFactor;
+                effectiveAcceleration *= catchUpFactor;
+            }
+        }
+
         if (this.boostTimer > 0) {
             this.boostTimer -= dt;
-            effectiveMaxSpeed = this.maxSpeed * 2.0; // 加速帶效果增強
+            effectiveMaxSpeed = this.maxSpeed * 2.0;
             effectiveAcceleration = this.acceleration * 2.5;
             if (this.carSpeed < effectiveMaxSpeed * 0.85) this.carSpeed = effectiveMaxSpeed * 0.85;
         }
@@ -2601,9 +2612,16 @@ class RacingGame {
                 this.skyBannerGroup.rotation.y += dt * 0.05; // Slow rotation
             }
 
+            // 計算領先者進度用於落後加速
+            let leaderProgress = this.lap + this.carT;
+            this.bots.forEach(bot => {
+                const bp = bot.lap + bot.carT;
+                if (bp > leaderProgress) leaderProgress = bp;
+            });
+
             // Update bots
             this.bots.forEach(bot => {
-                bot.update(dt, this.started);
+                bot.update(dt, this.started, leaderProgress);
 
                 // 為 NPC 進行高度修正 (Raycast)
                 if (this.trackMesh && this.raycaster) {
