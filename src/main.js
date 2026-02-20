@@ -1401,6 +1401,10 @@ class RacingGame {
     createCar() {
         this.car = new THREE.Group();
 
+        // 載入車身貼圖
+        const carPicTexture = new THREE.TextureLoader().load('/carpic.png');
+        carPicTexture.anisotropy = 16;
+
         // 車身主體 - 流線型設計
         const bodyMaterial = new THREE.MeshStandardMaterial({
             color: 0x00aaff,
@@ -1408,9 +1412,27 @@ class RacingGame {
             roughness: 0.1
         });
 
-        // 主車身
+        // 主車身 - 使用 6 面材質，頂面和側面貼上圖片
         const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 4.5);
-        const body = new THREE.Mesh(bodyGeo, bodyMaterial);
+
+        // 車身貼圖材質
+        const carPicMat = new THREE.MeshStandardMaterial({
+            map: carPicTexture,
+            metalness: 0.7,
+            roughness: 0.2
+        });
+
+        // BoxGeometry 6個面的順序: +X, -X, +Y, -Y, +Z, -Z
+        // 右側, 左側, 頂面, 底面, 前面, 後面
+        const bodyMaterials = [
+            carPicMat,      // 右側 (+X)
+            carPicMat,      // 左側 (-X)
+            carPicMat,      // 頂面 (+Y) - 引擎蓋
+            bodyMaterial,   // 底面 (-Y)
+            bodyMaterial,   // 前面 (+Z)
+            carPicMat       // 後面 (-Z)
+        ];
+        const body = new THREE.Mesh(bodyGeo, bodyMaterials);
         body.position.y = 0.6;
         body.castShadow = true;
         this.car.add(body);
