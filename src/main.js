@@ -89,8 +89,8 @@ class BotCar {
         this.carT = startT;
         this.sideOffset = sideOffset;
         this.carSpeed = 0;
-        this.maxSpeed = 65 + Math.random() * 20; // 提升挑戰性極速
-        this.acceleration = 45; // 更高加速度
+        this.maxSpeed = 40 + Math.random() * 15; // 降低 NPC 速度
+        this.acceleration = 25; // 降低 NPC 加速度
         this.trackLength = this.trackCurve.getLength();
         this.pushOffset = new THREE.Vector3(); // 用於碰撞反彈偏移
         this.boostTimer = 0; // 加速器計時
@@ -324,9 +324,9 @@ class RacingGame {
         this.carAngle = 0;
         this.carVelocityY = 0; // 垂直速度
         this.gravity = -30;    // 降低重力讓飛行時間更長
-        this.maxSpeed = 80; // 提升玩家速度
-        this.acceleration = 40; // 增加加速度
-        this.handling = 3.5; // 提高轉向能力以應對高難度賽道
+        this.maxSpeed = 50; // 降低玩家速度
+        this.acceleration = 25; // 降低加速度
+        this.handling = 3.5;
         this.bots = [];
         this.boostPads = [];
         this.playerBoostTimer = 0;
@@ -484,29 +484,29 @@ class RacingGame {
         // 1. 生成自定義控制點路徑
         const controlPoints = [
             new THREE.Vector3(0, 0, 300),       // 起點大直道
-            new THREE.Vector3(150, 8, 300),     // 微上坡
-            new THREE.Vector3(300, 0, 300),     // 下坡回平
-            new THREE.Vector3(500, 25, 100),    // 高速右彎大上坡
-            new THREE.Vector3(480, 50, -50),    // 山頂！
-            new THREE.Vector3(450, 20, -200),   // 急降下坡
-            new THREE.Vector3(300, 0, -320),    // 谷底
-            new THREE.Vector3(150, 15, -380),   // 微上坡
-            new THREE.Vector3(50, 30, -300),    // 丘陵
-            new THREE.Vector3(-50, 5, -200),    // 下降
-            new THREE.Vector3(-100, 20, -150),  // 連續起伏彎道
-            new THREE.Vector3(-200, 35, -250),  // 高丘
-            new THREE.Vector3(-300, 5, -100),   // 急降谷底
-            new THREE.Vector3(-550, 40, 0),     // 高銀行大彎
-            new THREE.Vector3(-400, 10, 150),   // 下降
-            new THREE.Vector3(-350, 25, 200),   // 又一個丘陵
-            // ===== 大跳台區段 =====
-            new THREE.Vector3(-230, 3, 345),    // 低段接近
-            new THREE.Vector3(-180, 4, 338),    // 仍然很低
-            new THREE.Vector3(-155, 35, 332),   // 陡坡急升！
-            new THREE.Vector3(-140, 45, 328),   // 跳台頂端
-            new THREE.Vector3(-130, 42, 325),   // 邊緣
-            new THREE.Vector3(-110, 5, 318),    // 急降！
-            new THREE.Vector3(-70, 0, 308),     // 著陸區
+            new THREE.Vector3(150, 3, 300),     // 微上坡
+            new THREE.Vector3(300, 0, 280),     // 平緩右彎
+            new THREE.Vector3(450, 8, 150),     // 緩上坡彎道
+            new THREE.Vector3(500, 15, 0),      // 小丘頂
+            new THREE.Vector3(480, 10, -120),   // 緩下坡
+            new THREE.Vector3(400, 3, -250),    // 長彎道
+            new THREE.Vector3(250, 0, -350),    // 谷底直道
+            new THREE.Vector3(100, 5, -380),    // 微上坡
+            new THREE.Vector3(-30, 10, -330),   // 緩彎
+            new THREE.Vector3(-120, 5, -230),   // 下坡彎
+            new THREE.Vector3(-200, 12, -180),  // 小丘
+            new THREE.Vector3(-300, 3, -100),   // 下降
+            new THREE.Vector3(-450, 10, 0),     // 大彎道
+            new THREE.Vector3(-400, 5, 130),    // 彎道出口
+            new THREE.Vector3(-330, 8, 220),    // 緩上坡
+            // ===== 跳台區段 =====
+            new THREE.Vector3(-250, 2, 320),    // 接近
+            new THREE.Vector3(-200, 3, 335),    // 仍然低
+            new THREE.Vector3(-170, 18, 338),   // 上坡
+            new THREE.Vector3(-150, 22, 335),   // 跳台頂
+            new THREE.Vector3(-135, 18, 330),   // 邊緣
+            new THREE.Vector3(-110, 3, 320),    // 下降
+            new THREE.Vector3(-70, 0, 310),     // 著陸
             new THREE.Vector3(-30, 0, 300)      // 回到起點
         ];
 
