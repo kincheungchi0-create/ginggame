@@ -807,7 +807,7 @@ class RacingGame {
     createTrackBorders() {
         if (!this.trackLayout) return;
 
-        const barrierHeight = 45; // 巨大護欄 (45 單位高)
+        const barrierHeight = 5; // 合理的高度，不會遮擋視線 (5 單位高)
         const halfWidth = this.trackWidth / 2 + 1;
 
         // 品牌材質
@@ -978,7 +978,7 @@ class RacingGame {
 
     // ==================== 護欄柱 ====================
     createBarrierPost(x, y, z, color) {
-        const height = 45;
+        const height = 5;
         const postGeo = new THREE.CylinderGeometry(1.2, 1.2, height, 8);
         const postMat = new THREE.MeshStandardMaterial({
             color: color,
