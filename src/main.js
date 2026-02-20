@@ -844,7 +844,7 @@ class RacingGame {
     createTrackBorders() {
         if (!this.trackCurve) return;
 
-        const postCount = 60; // 護欄數量
+        const postCount = 120; // 更密的護欄
         const halfWidth = this.trackWidth / 2 + 1; // 護欄在賽道外側
 
         // 品牌材質
