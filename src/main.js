@@ -173,24 +173,33 @@ class BotCar {
     }
 
     updateHeight(targetY, dt) {
-        const oldY = this.mesh.position.y;
-
         // 應用重力
         this.carVelocityY += this.gravity * dt;
         this.mesh.position.y += this.carVelocityY * dt;
 
         if (targetY !== undefined) {
             const floorY = targetY;
-            if (this.mesh.position.y <= floorY + 0.5) {
+            if (this.mesh.position.y <= floorY + 0.3) {
                 this.mesh.position.y = floorY;
 
-                let terrainVelY = (floorY - oldY) / dt;
-                terrainVelY = Math.min(Math.max(terrainVelY, -100), 100);
+                // 使用切線計算坡度帶來的向上速度
+                const tangent = this.trackCurve.getTangentAt(this.carT);
+                const slopeY = tangent.y;
+                const hLen = Math.sqrt(tangent.x * tangent.x + tangent.z * tangent.z);
+                const slopeAngle = Math.atan2(slopeY, hLen);
+                const launchVelY = Math.abs(this.carSpeed) * Math.sin(slopeAngle);
 
-                if (this.carVelocityY < -15 && (this.carVelocityY - terrainVelY) < -15) {
-                    this.carVelocityY = terrainVelY * 0.5; // 簡單緩衝
+                if (launchVelY > 0) {
+                    this.carVelocityY = Math.max(
+                        this.carVelocityY * 0.6 + launchVelY * 0.4,
+                        launchVelY
+                    );
+                } else if (this.carVelocityY > 8) {
+                    this.mesh.position.y = floorY + 1.0; // 起飛！
+                } else if (this.carVelocityY < -20) {
+                    this.carVelocityY *= -0.15;
                 } else {
-                    this.carVelocityY = terrainVelY; // 繼承坡度向上速度以起飛
+                    this.carVelocityY = launchVelY;
                 }
             }
         } else {
@@ -482,9 +491,15 @@ class RacingGame {
             new THREE.Vector3(-300, 10, -100),
             new THREE.Vector3(-550, 30, 0),     // 高銀行彎位
             new THREE.Vector3(-350, 15, 200),
-            new THREE.Vector3(-200, 5, 350),    // 準備起飛
-            new THREE.Vector3(-100, 40, 320),   // 🔼起飛跳台 (JUMP!)
-            new THREE.Vector3(-30, 0, 300)      // 🔽著陸回到起點
+            // ===== 大跳台區段 - 密集控制點製造尖銳邊緣 =====
+            new THREE.Vector3(-230, 3, 345),    // 低段接近
+            new THREE.Vector3(-180, 4, 338),    // 仍然很低
+            new THREE.Vector3(-155, 30, 332),   // 陡坡急升！
+            new THREE.Vector3(-140, 38, 328),   // 跳台頂端
+            new THREE.Vector3(-130, 36, 325),   // 邊緣 - 開始下降
+            new THREE.Vector3(-110, 5, 318),    // 急降！車應該在空中了
+            new THREE.Vector3(-70, 0, 308),     // 著陸區
+            new THREE.Vector3(-30, 0, 300)      // 回到起點
         ];
 
         this.trackCurve = new THREE.CatmullRomCurve3(controlPoints);
@@ -531,6 +546,7 @@ class RacingGame {
             vertices.push(pLeft.x, pLeft.y, pLeft.z);
             vertices.push(pRight.x, pRight.y, pRight.z);
 
+
             // 法線 (全部朝上)
             normals.push(0, 1, 0);
             normals.push(0, 1, 0);
@@ -561,6 +577,32 @@ class RacingGame {
                 const base = i * 2;
                 indices.push(base, 0, base + 1);
                 indices.push(base + 1, 0, 1);
+            }
+        }
+
+        // ============ 添加地形凸起 (Bumps) ============
+        // 在賽道特定位置加入尖銳的小山丘，讓高速行駛時車輛飛起
+        const bumpZones = [
+            { center: 0.12, width: 0.008, height: 7 },   // 早期小跳
+            { center: 0.30, width: 0.006, height: 5 },   // 中段小跳
+            { center: 0.48, width: 0.010, height: 9 },   // 大跳
+            { center: 0.62, width: 0.007, height: 6 },   // 後段跳
+        ];
+
+        const totalVerts = curvePoints.length;
+        for (const bump of bumpZones) {
+            for (let i = 0; i < totalVerts; i++) {
+                const t = i / totalVerts;
+                const dist = Math.abs(t - bump.center);
+                if (dist < bump.width) {
+                    // 尖銳三角形凸起
+                    const factor = 1.0 - (dist / bump.width);
+                    const bumpH = bump.height * factor;
+                    const bLeftIdx = i * 2;
+                    const bRightIdx = i * 2 + 1;
+                    vertices[bLeftIdx * 3 + 1] += bumpH;
+                    vertices[bRightIdx * 3 + 1] += bumpH;
+                }
             }
         }
 
@@ -2178,7 +2220,7 @@ class RacingGame {
     updateCarHeight(dt, curvePt) {
         this.raycaster = this.raycaster || new THREE.Raycaster();
 
-        const oldY = this.car.position.y; // 保存原高度
+        const oldY = this.car.position.y;
 
         // 應用重力
         this.carVelocityY += this.gravity * dt;
@@ -2186,51 +2228,77 @@ class RacingGame {
 
         // Raycast down from high up
         const rayOrigin = this.car.position.clone();
-        rayOrigin.y = 200; // 從極高處發射，以確保找到位於下方但高於曲線的賽道
+        rayOrigin.y = 300;
         this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
         const hits = this.raycaster.intersectObject(this.trackMesh);
 
+        // 找到最接近車輛 XZ 平面下方的路面
         let validHit = null;
-
         if (hits.length > 0) {
-            let minDiff = Infinity;
+            let bestDist = Infinity;
             for (const hit of hits) {
-                // Check if this hit is plausible relative to curve height
-                const diff = Math.abs(hit.point.y - curvePt.y);
-                if (diff < 40 && diff < minDiff) { // 放寬容錯至40，容許極陡峭跳台
-                    minDiff = diff;
-                    validHit = hit;
+                // 選擇離車輛當前高度最近的、且在車輛下方的路面
+                const hitY = hit.point.y;
+                if (hitY <= this.car.position.y + 2) { // 允許略高於車輛（剛起飛時）
+                    const dist = Math.abs(hitY - this.car.position.y);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        validHit = hit;
+                    }
+                }
+            }
+            // 如果沒找到，找任何最近的
+            if (!validHit) {
+                for (const hit of hits) {
+                    const dist = Math.abs(hit.point.y - curvePt.y);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        validHit = hit;
+                    }
                 }
             }
         }
 
-        let targetY = curvePt.y;
+        let floorY = curvePt.y;
         if (validHit) {
-            targetY = validHit.point.y;
+            floorY = validHit.point.y;
         }
 
-        const floorY = targetY;
-        const isGrounded = this.car.position.y <= floorY + 0.5;
+        const isGrounded = this.car.position.y <= floorY + 0.3;
 
         if (isGrounded) {
-            // 接觸地面
             this.car.position.y = floorY;
 
-            // 計算地形給予的垂直速度 (坡度向上的動量)
-            let terrainVelY = (floorY - oldY) / dt;
-            terrainVelY = Math.min(Math.max(terrainVelY, -150), 150); // 防爆衝限制
+            // 使用賽道切線計算坡度帶來的向上速度
+            const tangent = this.trackCurve.getTangentAt(this.carT);
+            const slopeY = tangent.y; // 切線的 Y 分量
+            const horizontalLen = Math.sqrt(tangent.x * tangent.x + tangent.z * tangent.z);
+            const slopeAngle = Math.atan2(slopeY, horizontalLen); // 坡度角
 
-            if (this.carVelocityY < -15 && (this.carVelocityY - terrainVelY) < -15) {
-                // 落地緩衝與震動
-                this.carVelocityY = terrainVelY * 0.5;
-                if (this.camera) this.camera.position.y -= 1;
+            // 車速產生的向上分量 = 前進速度 × sin(坡度角)
+            const launchVelY = Math.abs(this.carSpeed) * Math.sin(slopeAngle);
+
+            // 動量混合：保留 60% 上幀慣性 + 40% 坡度計算的新速度
+            // 這確保上坡累積的速度不會在峰頂突然消失
+            if (launchVelY > 0) {
+                this.carVelocityY = Math.max(
+                    this.carVelocityY * 0.6 + launchVelY * 0.4,
+                    launchVelY
+                );
+            } else if (this.carVelocityY > 8) {
+                // 地形開始下降但車仍有向上動量 → 起飛！
+                this.car.position.y = floorY + 1.0; // 脫離地面
+                // 保持 carVelocityY 不變，讓它自然飛
+            } else if (this.carVelocityY < -20) {
+                // 重落地
+                this.carVelocityY *= -0.15;
+                if (this.camera) this.camera.position.y -= 1.5;
             } else {
-                // 貼地沿著坡度行駛，繼承垂直速度來準備騰空
-                this.carVelocityY = terrainVelY;
+                this.carVelocityY = launchVelY;
             }
 
-            // Align to normal
+            // 對齊法線
             if (validHit) {
                 const n = validHit.face.normal.clone();
                 const targetRot = new THREE.Object3D();
@@ -2246,14 +2314,18 @@ class RacingGame {
                 this.alignFallback(curvePt);
             }
         } else {
-            // 在空中飛行！
-            // 讓車頭隨著垂直速度微微調整俯仰角，模擬真實物理姿態
+            // ✈️ 在空中飛行！
             const targetRot = new THREE.Object3D();
             targetRot.position.copy(this.car.position);
-            const pitchDown = Math.max(-0.5, this.carVelocityY * 0.01);
-            const fwd = new THREE.Vector3(Math.sin(this.carAngle), pitchDown, Math.cos(this.carAngle)).normalize();
+            // 車頭俯仰 = 垂直速度的比例
+            const pitchDown = Math.max(-0.8, this.carVelocityY * 0.015);
+            const fwd = new THREE.Vector3(
+                Math.sin(this.carAngle),
+                pitchDown,
+                Math.cos(this.carAngle)
+            ).normalize();
             targetRot.lookAt(targetRot.position.clone().add(fwd));
-            this.car.quaternion.slerp(targetRot.quaternion, 0.05);
+            this.car.quaternion.slerp(targetRot.quaternion, 0.08);
         }
     }
 
