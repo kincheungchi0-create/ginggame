@@ -89,9 +89,11 @@ class BotCar {
         this.carT = startT;
         this.sideOffset = sideOffset;
         this.carSpeed = 0;
-        this.maxSpeed = 30 + Math.random() * 10;
-        this.acceleration = 15;
+        this.maxSpeed = 45 + Math.random() * 15; // 大幅提升極速 (原 30-40)
+        this.acceleration = 30; // 提升加速度 (原 15)
         this.trackLength = this.trackCurve.getLength();
+        this.pushOffset = new THREE.Vector3(); // 用於碰撞反彈偏移
+        this.boostTimer = 0; // 加速器計時
 
         this.mesh = this.createMesh(color);
         this.scene.add(this.mesh);
@@ -168,11 +170,27 @@ class BotCar {
         return group;
     }
 
+    updateHeight(targetY) {
+        if (targetY !== undefined) {
+            this.mesh.position.y += (targetY - this.mesh.position.y) * 0.5;
+        }
+    }
+
     update(dt, started) {
         if (!started) return;
 
-        this.carSpeed += this.acceleration * dt;
-        if (this.carSpeed > this.maxSpeed) this.carSpeed = this.maxSpeed;
+        let effectiveMaxSpeed = this.maxSpeed;
+        let effectiveAcceleration = this.acceleration;
+
+        if (this.boostTimer > 0) {
+            this.boostTimer -= dt;
+            effectiveMaxSpeed = this.maxSpeed * 2.0; // 加速帶效果增強
+            effectiveAcceleration = this.acceleration * 2.5;
+            if (this.carSpeed < effectiveMaxSpeed * 0.85) this.carSpeed = effectiveMaxSpeed * 0.85;
+        }
+
+        this.carSpeed += effectiveAcceleration * dt;
+        if (this.carSpeed > effectiveMaxSpeed) this.carSpeed = effectiveMaxSpeed;
 
         // Move along track curve
         this.carT += (this.carSpeed * dt) / this.trackLength;
@@ -185,7 +203,13 @@ class BotCar {
 
         // Apply position
         this.mesh.position.copy(pos).add(side.clone().multiplyScalar(this.sideOffset));
-        this.mesh.position.y += 0.6;
+        // Reset Y temporarily to avoid cumulative errors before height update
+        this.mesh.position.y = pos.y;
+
+        // 套用反彈偏移並逐漸衰減
+        this.mesh.position.add(this.pushOffset);
+        this.pushOffset.multiplyScalar(0.9);
+        if (this.pushOffset.length() < 0.01) this.pushOffset.set(0, 0, 0);
 
         // Fix Orientation: Look forward relative to CURRENT position
         const lookTarget = this.mesh.position.clone().add(tangent);
@@ -236,6 +260,10 @@ class RacingGame {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(this.renderer.domElement);
 
+        // ==================== 物理與工具 ====================
+        this.raycaster = new THREE.Raycaster();
+        this.pushOffset = new THREE.Vector3(); // 玩家賽車的反彈偏移
+
         // ==================== 時間追蹤 ====================
         this.clock = new THREE.Clock();
         this.gameTime = 0;
@@ -255,6 +283,8 @@ class RacingGame {
         this.acceleration = 25; // Gentle acceleration
         this.handling = 2.5;
         this.bots = [];
+        this.boostPads = [];
+        this.playerBoostTimer = 0;
 
         // ==================== 輸入狀態 ====================
         this.keys = {
@@ -535,7 +565,10 @@ class RacingGame {
         // 5. 起點
         this.createStartLine();
 
-        // 6. 初始化 Minimap
+        // 6. 加速帶
+        this.createBoostPads();
+
+        // 7. 初始化 Minimap
         this.initMinimap();
     }
 
@@ -602,6 +635,47 @@ class RacingGame {
 
         // 交叉點的大型 Logo decals
         this.createDecals();
+    }
+
+    createBoostPads() {
+        if (!this.trackLayout) return;
+
+        const padGeo = new THREE.PlaneGeometry(8, 4);
+        // 創建黃色發光材質
+        const padMat = new THREE.MeshBasicMaterial({
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+
+        // 在賽道上每隔一段距離放置一個加速帶
+        const interval = 80; // 每 80 個片段放置一個
+        for (let i = interval; i < this.trackLayout.length; i += interval) {
+            const layout = this.trackLayout[i];
+            const pad = new THREE.Group();
+
+            // 主底板
+            const mesh = new THREE.Mesh(padGeo, padMat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = 0.05; // 稍微高於地面
+            pad.add(mesh);
+
+            // 增加箭頭裝飾（簡單的三角形）
+            const arrowGeo = new THREE.CircleGeometry(1.5, 3);
+            const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+            arrow.rotation.x = -Math.PI / 2;
+            arrow.rotation.z = Math.PI; // 指向前
+            arrow.position.y = 0.06;
+            pad.add(arrow);
+
+            pad.position.copy(layout.position);
+            pad.lookAt(layout.position.clone().add(layout.tangent));
+
+            this.scene.add(pad);
+            this.boostPads.push({ mesh: pad, pos: layout.position.clone() });
+        }
     }
 
     createDecals() {
@@ -1901,12 +1975,23 @@ class RacingGame {
         // 手機自動加速
         const shouldAccelerate = this.keys.forward || this.mobileAutoAccelerate;
 
+        // 加速帶效果累加
+        let effectiveMaxSpeed = this.maxSpeed;
+        let effectiveAcceleration = this.acceleration;
+        if (this.playerBoostTimer > 0) {
+            this.playerBoostTimer -= dt;
+            effectiveMaxSpeed = this.maxSpeed * 2.2; // 玩家加速更猛
+            effectiveAcceleration = this.acceleration * 3;
+            if (this.carSpeed < effectiveMaxSpeed * 0.7) this.carSpeed = effectiveMaxSpeed * 0.7;
+        }
+
         if (shouldAccelerate) {
-            this.carSpeed += this.acceleration * dt;
-            if (this.carSpeed > this.maxSpeed) this.carSpeed = this.maxSpeed;
+            this.carSpeed += effectiveAcceleration * dt;
+            if (this.carSpeed > 0 && this.carSpeed < 1) console.log("Car Speeding up:", this.carSpeed);
+            if (this.carSpeed > effectiveMaxSpeed) this.carSpeed = effectiveMaxSpeed;
         } else if (this.keys.backward) {
-            this.carSpeed -= this.acceleration * 1.5 * dt;
-            if (this.carSpeed < -this.maxSpeed * 0.4) this.carSpeed = -this.maxSpeed * 0.4;
+            this.carSpeed -= effectiveAcceleration * 1.5 * dt;
+            if (this.carSpeed < -effectiveMaxSpeed * 0.4) this.carSpeed = -effectiveMaxSpeed * 0.4;
         } else {
             // 自然減速
             this.carSpeed *= 0.98;
@@ -2020,6 +2105,13 @@ class RacingGame {
         // Apply updates
         this.car.position.x = nextPos.x;
         this.car.position.z = nextPos.z;
+
+        // 套用反彈偏移並逐漸衰減
+        if (this.pushOffset) {
+            this.car.position.add(this.pushOffset);
+            this.pushOffset.multiplyScalar(0.9);
+            if (this.pushOffset.length() < 0.01) this.pushOffset.set(0, 0, 0);
+        }
 
         // 3. Update Y Position (Raycast + Fallback)
         this.updateCarHeight(curvePt);
@@ -2212,6 +2304,95 @@ class RacingGame {
 
         if (this.soundManager) this.soundManager.stopEngine();
     }
+
+    // ==================== 碰撞檢測 ====================
+    checkCollisions() {
+        if (!this.started || this.paused) return;
+
+        const minDist = 4.2; // 增加碰撞檢測距離
+
+        // 玩家與 NPC 碰撞
+        const playerPos = this.car.position;
+        this.bots.forEach(bot => {
+            const botPos = bot.mesh.position;
+            const dx = playerPos.x - botPos.x;
+            const dz = playerPos.z - botPos.z;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq < minDist * minDist) {
+                const dist = Math.sqrt(distSq) || 0.1;
+                const nx = dx / dist;
+                const nz = dz / dist;
+                const force = (minDist - dist) * 2.5; // 大幅增加力量係數
+
+                // 強制反彈偏移 (Knockback)
+                this.pushOffset.x += nx * force;
+                this.pushOffset.z += nz * force;
+                bot.pushOffset.x -= nx * force;
+                bot.pushOffset.z -= nz * force;
+
+                // 劇烈速度損耗
+                if (Math.abs(this.carSpeed) > 10) {
+                    this.carSpeed *= -0.6; // 反向彈開更猛
+                } else {
+                    this.carSpeed = -8; // 給予一個基礎的反向速度
+                }
+                bot.carSpeed *= 0.6; // NPC 被撞後速度保留更多 (原 0.2)，更難對付
+
+                // 增加相機震動 (震動幅度加大)
+                this.camera.position.x += (Math.random() - 0.5) * 3;
+                this.camera.position.y += (Math.random() - 0.5) * 3;
+                this.camera.position.z += (Math.random() - 0.5) * 3;
+
+                console.log("COLLISION! Bouncing...");
+            }
+        });
+
+        // NPC 之間的碰撞
+        for (let i = 0; i < this.bots.length; i++) {
+            for (let j = i + 1; j < this.bots.length; j++) {
+                const botA = this.bots[i];
+                const botB = this.bots[j];
+                const dx = botA.mesh.position.x - botB.mesh.position.x;
+                const dz = botA.mesh.position.z - botB.mesh.position.z;
+                const distSq = dx * dx + dz * dz;
+
+                if (distSq < minDist * minDist) {
+                    const dist = Math.sqrt(distSq) || 0.1;
+                    const nx = dx / dist;
+                    const nz = dz / dist;
+                    const force = (minDist - dist) * 2.0; // NPC 互撞也增加力量
+
+                    botA.pushOffset.x += nx * force;
+                    botA.pushOffset.z += nz * force;
+                    botB.pushOffset.x -= nx * force;
+                    botB.pushOffset.z -= nz * force;
+
+                    botA.carSpeed *= 0.8; // NPC 互撞速度損失大幅降低 (原 0.6)
+                    botB.carSpeed *= 0.8;
+                }
+            }
+        }
+
+        // 檢測加速帶
+        this.boostPads.forEach(pad => {
+            // 玩家檢測
+            const pDistSq = this.car.position.distanceToSquared(pad.pos);
+            if (pDistSq < 25) { // 5公尺內
+                if (this.playerBoostTimer <= 0) console.log("BOOST PAD ACTIVATED!");
+                this.playerBoostTimer = 2.0; // 2秒加速
+            }
+
+            // NPC 檢測
+            this.bots.forEach(bot => {
+                const bDistSq = bot.mesh.position.distanceToSquared(pad.pos);
+                if (bDistSq < 25) {
+                    bot.boostTimer = 2.0; // NPC 加速時間增加 (原 1.5)
+                }
+            });
+        });
+    }
+
     // ==================== 視窗大小調整 ====================
     onResize() {
         this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -2227,6 +2408,7 @@ class RacingGame {
 
         if (!this.paused) {
             this.updateCar(dt);
+            this.checkCollisions(); // 檢測碰撞
             this.updateCamera();
 
             // Rotate sky banners
@@ -2235,7 +2417,20 @@ class RacingGame {
             }
 
             // Update bots
-            this.bots.forEach(bot => bot.update(dt, this.started));
+            this.bots.forEach(bot => {
+                bot.update(dt, this.started);
+
+                // 為 NPC 進行高度修正 (Raycast)
+                if (this.trackMesh && this.raycaster) {
+                    const rayOrigin = bot.mesh.position.clone();
+                    rayOrigin.y = 100; // 從更高的地方射線
+                    this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
+                    const hits = this.raycaster.intersectObject(this.trackMesh);
+                    if (hits.length > 0) {
+                        bot.updateHeight(hits[0].point.y);
+                    }
+                }
+            });
         }
 
         this.updateHUD(dt);
