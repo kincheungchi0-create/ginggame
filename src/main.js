@@ -275,8 +275,8 @@ class RacingGame {
     init() {
         // ==================== 場景設置 ====================
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x0c0e1a);
-        this.scene.fog = new THREE.Fog(0x0c0e1a, 200, 1200);
+        this.scene.background = new THREE.Color(0x87CEEB);
+        this.scene.fog = new THREE.Fog(0x87CEEB, 300, 1500);
 
         // ==================== 相機設置 ====================
         this.camera = new THREE.PerspectiveCamera(
@@ -361,33 +361,32 @@ class RacingGame {
 
     // ==================== 燈光設置 ====================
     setupLights() {
-        // 環境光
-        const ambient = new THREE.AmbientLight(0x404080, 0.5);
+        // 環境光 - 明亮的日間
+        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
         this.scene.add(ambient);
 
         // 主方向光（太陽）
-        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-        sun.position.set(50, 100, 50);
+        const sun = new THREE.DirectionalLight(0xfff5e0, 1.5);
+        sun.position.set(80, 150, 60);
         sun.castShadow = true;
         sun.shadow.mapSize.width = 2048;
         sun.shadow.mapSize.height = 2048;
         sun.shadow.camera.near = 10;
-        sun.shadow.camera.far = 300;
-        sun.shadow.camera.left = -100;
-        sun.shadow.camera.right = 100;
-        sun.shadow.camera.top = 100;
-        sun.shadow.camera.bottom = -100;
+        sun.shadow.camera.far = 400;
+        sun.shadow.camera.left = -150;
+        sun.shadow.camera.right = 150;
+        sun.shadow.camera.top = 150;
+        sun.shadow.camera.bottom = -150;
         this.scene.add(sun);
 
-        // 補光
-        const fill = new THREE.DirectionalLight(0x4488ff, 0.8); // Brighter fill
-        fill.position.set(-50, 30, -50);
+        // 補光 - 天空藍色反射
+        const fill = new THREE.DirectionalLight(0x8ec8f0, 0.6);
+        fill.position.set(-50, 40, -50);
         this.scene.add(fill);
 
-        // Extra light for bridge
-        const bridgeLight = new THREE.PointLight(0xffffff, 1, 100);
-        bridgeLight.position.set(0, 40, 0);
-        this.scene.add(bridgeLight);
+        // 額外補光
+        const fill2 = new THREE.HemisphereLight(0x87CEEB, 0x3a7d44, 0.4);
+        this.scene.add(fill2);
     }
 
     // ==================== 創建品牌素材 (CMBI) ====================
@@ -1544,12 +1543,12 @@ class RacingGame {
 
     // ==================== 創建環境 ====================
     createEnvironment() {
-        // 地面 - 城市柏油路面
+        // 地面 - 綠色草地（與深色柏油賽道區分）
         const groundGeo = new THREE.PlaneGeometry(6000, 6000);
         const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x1a1a1a,
-            roughness: 0.9,
-            metalness: 0.1
+            color: 0x3a7d44,
+            roughness: 0.95,
+            metalness: 0
         });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
@@ -1557,13 +1556,13 @@ class RacingGame {
         ground.receiveShadow = true;
         this.scene.add(ground);
 
-        // 天空球 - 城市夜空帶光污染
+        // 天空球 - 日間藍天
         const skyGeo = new THREE.SphereGeometry(900, 32, 32);
         const skyMat = new THREE.ShaderMaterial({
             uniforms: {
-                topColor: { value: new THREE.Color(0x0a0e1e) },
-                bottomColor: { value: new THREE.Color(0x0c0e1a) },
-                horizonColor: { value: new THREE.Color(0x2a1520) }
+                topColor: { value: new THREE.Color(0x4a90d9) },
+                bottomColor: { value: new THREE.Color(0x87CEEB) },
+                horizonColor: { value: new THREE.Color(0xd4e8f7) }
             },
             vertexShader: `
                 varying vec3 vWorldPosition;
@@ -1581,10 +1580,10 @@ class RacingGame {
                 void main() {
                     float h = normalize(vWorldPosition).y;
                     vec3 col;
-                    if (h > 0.15) {
-                        col = mix(horizonColor, topColor, (h - 0.15) / 0.85);
+                    if (h > 0.3) {
+                        col = mix(horizonColor, topColor, (h - 0.3) / 0.7);
                     } else if (h > 0.0) {
-                        col = mix(horizonColor, horizonColor * 1.2, h / 0.15);
+                        col = mix(horizonColor, horizonColor, h / 0.3);
                     } else {
                         col = mix(horizonColor, bottomColor, -h);
                     }
@@ -1596,40 +1595,13 @@ class RacingGame {
         const sky = new THREE.Mesh(skyGeo, skyMat);
         this.scene.add(sky);
 
-        // 星星 (城市光污染下較少)
-        this.createStars();
-
         // 城市建築裝飾
         this.createScenery();
     }
 
-    // ==================== 創建星星 (城市光污染下較少) ====================
+    // 日間模式不需要星星
     createStars() {
-        const starsGeo = new THREE.BufferGeometry();
-        const starCount = 400; // 城市光污染，星星較少
-        const positions = new Float32Array(starCount * 3);
-
-        for (let i = 0; i < starCount; i++) {
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(Math.random() * 0.8); // 偏向頂部
-            const radius = 600 + Math.random() * 200;
-
-            positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-            positions[i * 3 + 1] = Math.abs(radius * Math.cos(phi));
-            positions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
-        }
-
-        starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-        const starsMat = new THREE.PointsMaterial({
-            color: 0xeeeeff,
-            size: 1.0,
-            transparent: true,
-            opacity: 0.5
-        });
-
-        const stars = new THREE.Points(starsGeo, starsMat);
-        this.scene.add(stars);
+        // 日間模式 - 不顯示星星
     }
 
     // ==================== 場景裝飾 (城市建築) ====================
@@ -1669,11 +1641,16 @@ class RacingGame {
 
         // 建築主體
         const bodyGeo = new THREE.BoxGeometry(width, height, depth);
-        const shade = 0.1 + Math.random() * 0.15;
+        const shade = 0.55 + Math.random() * 0.3;
+        const tint = Math.random();
         const bodyMat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(shade, shade, shade + 0.02),
-            roughness: 0.8,
-            metalness: 0.2
+            color: new THREE.Color(
+                shade * (0.85 + tint * 0.15),
+                shade * (0.85 + tint * 0.1),
+                shade * (0.9 + tint * 0.1)
+            ),
+            roughness: 0.7,
+            metalness: 0.1
         });
         const body = new THREE.Mesh(bodyGeo, bodyMat);
         body.position.y = height / 2;
@@ -1682,11 +1659,11 @@ class RacingGame {
         building.add(body);
 
         // 窗戶燈光 - 在建築側面加發光小方塊
-        const windowColors = [0xffdd88, 0xffeebb, 0x88ccff, 0xffffff];
-        const windowMat = new THREE.MeshBasicMaterial({
+        const windowColors = [0x88ccff, 0xaaddff, 0x99bbdd, 0xc0e0ff];
+        const windowMat = new THREE.MeshStandardMaterial({
             color: windowColors[Math.floor(Math.random() * windowColors.length)],
-            transparent: true,
-            opacity: 0.7 + Math.random() * 0.3
+            metalness: 0.9,
+            roughness: 0.1
         });
 
         const windowRows = Math.floor(height / 3);
