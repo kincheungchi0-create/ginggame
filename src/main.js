@@ -275,8 +275,8 @@ class RacingGame {
     init() {
         // ==================== 場景設置 ====================
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x0a0a1a);
-        this.scene.fog = new THREE.Fog(0x0a0a1a, 200, 1200);
+        this.scene.background = new THREE.Color(0x0c0e1a);
+        this.scene.fog = new THREE.Fog(0x0c0e1a, 200, 1200);
 
         // ==================== 相機設置 ====================
         this.camera = new THREE.PerspectiveCamera(
@@ -1544,12 +1544,12 @@ class RacingGame {
 
     // ==================== 創建環境 ====================
     createEnvironment() {
-        // 地面 (擴大以完全覆蓋新賽道範圍，避免看到邊緣)
+        // 地面 - 城市柏油路面
         const groundGeo = new THREE.PlaneGeometry(6000, 6000);
         const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x0d1a0d,
-            roughness: 1,
-            metalness: 0
+            color: 0x1a1a1a,
+            roughness: 0.9,
+            metalness: 0.1
         });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
@@ -1557,13 +1557,13 @@ class RacingGame {
         ground.receiveShadow = true;
         this.scene.add(ground);
 
-        // 天空球 (擴大到匹配霧氣和相機遠裁剪面)
+        // 天空球 - 城市夜空帶光污染
         const skyGeo = new THREE.SphereGeometry(900, 32, 32);
         const skyMat = new THREE.ShaderMaterial({
             uniforms: {
-                topColor: { value: new THREE.Color(0x050510) },
-                bottomColor: { value: new THREE.Color(0x0a0a1a) },
-                horizonColor: { value: new THREE.Color(0x15102a) }
+                topColor: { value: new THREE.Color(0x0a0e1e) },
+                bottomColor: { value: new THREE.Color(0x0c0e1a) },
+                horizonColor: { value: new THREE.Color(0x2a1520) }
             },
             vertexShader: `
                 varying vec3 vWorldPosition;
@@ -1581,8 +1581,10 @@ class RacingGame {
                 void main() {
                     float h = normalize(vWorldPosition).y;
                     vec3 col;
-                    if (h > 0.0) {
-                        col = mix(horizonColor, topColor, h);
+                    if (h > 0.15) {
+                        col = mix(horizonColor, topColor, (h - 0.15) / 0.85);
+                    } else if (h > 0.0) {
+                        col = mix(horizonColor, horizonColor * 1.2, h / 0.15);
                     } else {
                         col = mix(horizonColor, bottomColor, -h);
                     }
@@ -1594,23 +1596,23 @@ class RacingGame {
         const sky = new THREE.Mesh(skyGeo, skyMat);
         this.scene.add(sky);
 
-        // 星星
+        // 星星 (城市光污染下較少)
         this.createStars();
 
-        // 場景裝飾物
+        // 城市建築裝飾
         this.createScenery();
     }
 
-    // ==================== 創建星星 ====================
+    // ==================== 創建星星 (城市光污染下較少) ====================
     createStars() {
         const starsGeo = new THREE.BufferGeometry();
-        const starCount = 1000;
+        const starCount = 400; // 城市光污染，星星較少
         const positions = new Float32Array(starCount * 3);
 
         for (let i = 0; i < starCount; i++) {
             const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(Math.random() * 2 - 1);
-            const radius = 350 + Math.random() * 50;
+            const phi = Math.acos(Math.random() * 0.8); // 偏向頂部
+            const radius = 600 + Math.random() * 200;
 
             positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
             positions[i * 3 + 1] = Math.abs(radius * Math.cos(phi));
@@ -1620,66 +1622,109 @@ class RacingGame {
         starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
         const starsMat = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 1.5,
+            color: 0xeeeeff,
+            size: 1.0,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.5
         });
 
         const stars = new THREE.Points(starsGeo, starsMat);
         this.scene.add(stars);
     }
 
-    // ==================== 場景裝飾 ====================
+    // ==================== 場景裝飾 (城市建築) ====================
     createScenery() {
         if (!this.trackCurve) return;
         const curvePoints = this.trackCurve.getSpacedPoints(150);
 
-        // 隨機在廣闊區域放置樹木，並確保不位於賽道上
-        for (let i = 0; i < 400; i++) {
-            const x = (Math.random() - 0.5) * 1600;
-            const z = (Math.random() - 0.5) * 1600;
-            const treePos = new THREE.Vector3(x, 0, z);
+        // 在賽道周圍放置城市建築
+        for (let i = 0; i < 300; i++) {
+            const x = (Math.random() - 0.5) * 1800;
+            const z = (Math.random() - 0.5) * 1800;
 
             let tooClose = false;
             for (const pt of curvePoints) {
-                // Ignore height diff for basic track collision
-                const dx = treePos.x - pt.x;
-                const dz = treePos.z - pt.z;
-                if (dx * dx + dz * dz < 900) { // 30 units squared (keep some margin from edge)
+                const dx = x - pt.x;
+                const dz = z - pt.z;
+                if (dx * dx + dz * dz < 1600) { // 40 units
                     tooClose = true;
                     break;
                 }
             }
 
             if (!tooClose) {
-                this.createTree(x, z);
+                this.createBuilding(x, z);
             }
         }
     }
 
-    // ==================== 創建樹木 ====================
-    createTree(x, z) {
-        const tree = new THREE.Group();
+    // ==================== 創建建築 ====================
+    createBuilding(x, z) {
+        const building = new THREE.Group();
 
-        // 樹幹
-        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 3, 8);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 1.5;
-        trunk.castShadow = true;
-        tree.add(trunk);
+        // 隨機建築尺寸
+        const width = 4 + Math.random() * 10;
+        const depth = 4 + Math.random() * 10;
+        const height = 10 + Math.random() * 60;
 
-        // 樹冠
-        const foliageGeo = new THREE.ConeGeometry(2, 4, 8);
-        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2d5a2d });
-        const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-        foliage.position.y = 5;
-        foliage.castShadow = true;
-        tree.add(foliage);
+        // 建築主體
+        const bodyGeo = new THREE.BoxGeometry(width, height, depth);
+        const shade = 0.1 + Math.random() * 0.15;
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(shade, shade, shade + 0.02),
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = height / 2;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        building.add(body);
 
-        tree.position.set(x, 0, z);
-        this.scene.add(tree);
+        // 窗戶燈光 - 在建築側面加發光小方塊
+        const windowColors = [0xffdd88, 0xffeebb, 0x88ccff, 0xffffff];
+        const windowMat = new THREE.MeshBasicMaterial({
+            color: windowColors[Math.floor(Math.random() * windowColors.length)],
+            transparent: true,
+            opacity: 0.7 + Math.random() * 0.3
+        });
+
+        const windowRows = Math.floor(height / 3);
+        const windowCols = Math.floor(width / 2.5);
+        const windowGeo = new THREE.PlaneGeometry(1.0, 1.2);
+
+        for (let row = 0; row < windowRows; row++) {
+            for (let col = 0; col < windowCols; col++) {
+                if (Math.random() > 0.4) { // 60% 的窗戶亮燈
+                    const wy = 2 + row * 3;
+                    const wx = -width / 2 + 1.5 + col * 2.5;
+
+                    // 前側
+                    const wFront = new THREE.Mesh(windowGeo, windowMat);
+                    wFront.position.set(wx, wy, depth / 2 + 0.01);
+                    building.add(wFront);
+
+                    // 後側
+                    const wBack = new THREE.Mesh(windowGeo, windowMat);
+                    wBack.position.set(wx, wy, -depth / 2 - 0.01);
+                    wBack.rotation.y = Math.PI;
+                    building.add(wBack);
+                }
+            }
+        }
+
+        // 屋頂航空燈 (高樓才有)
+        if (height > 35) {
+            const lightGeo = new THREE.SphereGeometry(0.4, 8, 8);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const topLight = new THREE.Mesh(lightGeo, lightMat);
+            topLight.position.y = height + 0.5;
+            building.add(topLight);
+        }
+
+        building.position.set(x, 0, z);
+        building.rotation.y = Math.random() * Math.PI * 0.5;
+        this.scene.add(building);
     }
 
     // ==================== 創建 HUD ====================
