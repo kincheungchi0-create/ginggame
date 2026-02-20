@@ -96,6 +96,7 @@ class BotCar {
         this.boostTimer = 0; // 加速器計時
         this.carVelocityY = 0;
         this.gravity = -30; // 降低重力讓飛行時間更長
+        this.lap = 1; // NPC 圈數追蹤
 
         this.mesh = this.createMesh(color);
         this.scene.add(this.mesh);
@@ -226,9 +227,12 @@ class BotCar {
         this.carSpeed += effectiveAcceleration * dt;
         if (this.carSpeed > effectiveMaxSpeed) this.carSpeed = effectiveMaxSpeed;
 
-        // Move along track curve
+        const oldT = this.carT;
         this.carT += (this.carSpeed * dt) / this.trackLength;
-        if (this.carT > 1) this.carT -= 1;
+        if (this.carT > 1) {
+            this.carT -= 1;
+            this.lap++; // NPC 完成一圈
+        }
 
         const pos = this.trackCurve.getPointAt(this.carT);
         const tangent = this.trackCurve.getTangentAt(this.carT).normalize();
@@ -1162,8 +1166,8 @@ class RacingGame {
             }
 
             mesh.position.set(x, height, z);
+            // 面向賽道中心但保持圖片正向
             mesh.lookAt(0, height, 0);
-            mesh.rotation.x = 0.1; // Tilt down slightly
             this.skyBannerGroup.add(mesh);
         }
     }
@@ -1269,34 +1273,6 @@ class RacingGame {
             // Lift slightly above ground
             banner.rotation.x = -Math.PI / 2;
             banner.position.y = 0.04;
-
-            // Fix orientation so text faces driver?
-            // If Group looks at tangent (Forward), and we rotate X -90 (Top goes Back),
-            // The top of the image points NEGATIVE Z (Backwards).
-            // So as you approach, the top of the image is closest to you? No.
-            // Z is Forward. -Z is Backward.
-            // We want Top of image to be Further along Z (Forward).
-            // So we need to rotate differently.
-            // Try rotation.x = -Math.PI / 2 creates top pointing -Z (Back).
-            // Try rotation.x = Math.PI / 2 creates top pointing Z (Front)? No plane is one sided.
-            // Try rotation.x = -Math.PI / 2 AND rotation.z = Math.PI (Spin around vertical).
-            // Or just rotation.z = Math.PI.
-
-            // Simplest: Check in game. Usually -Math.PI/2 makes top point -Z.
-            // Driver drives towards +Z (Tangent).
-            // So driver sees Bottom of image first, Top of image last.
-            // That is correct for reading text "upwards"?
-            // Or usually text should face you "upright" in 3D?
-            // On floor, "Up" is "Forward".
-
-            banner.rotation.z = Math.PI; // Rotate 180 to flip text if needed. 
-            // Let's assumet -PI/2 aligns "Up" with "-Z".
-            // Driver moves +Z.
-            // So "Up" is "Behind" the driver? That's upside down.
-            // We want "Up" in image to be +Z (direction of travel).
-            // So we need to rotate Z by 180?
-
-            // Let's try adding Z rotation.
 
             group.add(banner);
 
@@ -1517,15 +1493,15 @@ class RacingGame {
 
         const botConfigs = [
             { color: 0xff3333, startT: 0.02, offset: -8 },   // 紅色
-            { color: 0x33ff33, startT: 0.01, offset: 8 },    // 綠色
-            { color: 0x3388ff, startT: 0.03, offset: -4 },   // 藍色
-            { color: 0xffaa00, startT: 0.04, offset: 4 },    // 橙色
-            { color: 0xff33ff, startT: 0.05, offset: -12 },  // 紫色
-            { color: 0x00ffcc, startT: 0.06, offset: 12 },   // 青綠色
-            { color: 0xffff33, startT: 0.07, offset: -1 },   // 黃色
-            { color: 0xff6633, startT: 0.08, offset: 0 },    // 橘紅色
-            { color: 0x33ffff, startT: 0.09, offset: -15 },  // 水色
-            { color: 0xcc33ff, startT: 0.10, offset: 15 },   // 深紫色
+            { color: 0x33ff33, startT: 0.04, offset: 8 },    // 綠色
+            { color: 0x3388ff, startT: 0.06, offset: -4 },   // 藍色
+            { color: 0xffaa00, startT: 0.08, offset: 4 },    // 橙色
+            { color: 0xff33ff, startT: 0.10, offset: -12 },  // 紫色
+            { color: 0x00ffcc, startT: 0.12, offset: 12 },   // 青綠色
+            { color: 0xffff33, startT: 0.14, offset: -1 },   // 黃色
+            { color: 0xff6633, startT: 0.16, offset: 0 },    // 橘紅色
+            { color: 0x33ffff, startT: 0.18, offset: -15 },  // 水色
+            { color: 0xcc33ff, startT: 0.20, offset: 15 },   // 深紫色
         ];
 
         for (const cfg of botConfigs) {
@@ -1537,6 +1513,10 @@ class RacingGame {
                 cfg.startT,
                 cfg.offset
             );
+            // 初始化 NPC 位置到賽道上正確的高度
+            const initPos = this.trackCurve.getPointAt(cfg.startT);
+            bot.mesh.position.y = initPos.y + 1;
+            bot.carVelocityY = 0;
             this.bots.push(bot);
         }
     }
@@ -1797,6 +1777,10 @@ class RacingGame {
                 <span id="speed-value">0</span>
                 <span class="hud-label">KM/H</span>
             </div>
+            <div class="hud-item rank-display">
+                <span class="hud-label">RANK</span>
+                <span id="rank-value">1</span> / ${10 + 1}
+            </div>
             <div class="hud-item lap-display">
                 <span class="hud-label">LAP</span>
                 <span id="lap-value">1</span> / ${this.maxLaps}
@@ -1811,6 +1795,7 @@ class RacingGame {
         this.speedElement = document.getElementById('speed-value');
         this.lapElement = document.getElementById('lap-value');
         this.timeElement = document.getElementById('time-value');
+        this.rankElement = document.getElementById('rank-value');
     }
 
     // ==================== 輸入處理 ====================
@@ -2437,6 +2422,17 @@ class RacingGame {
             const ms = Math.floor((this.gameTime % 1) * 100);
             this.timeElement.textContent =
                 `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+        }
+
+        // 排名計算
+        if (this.started && this.rankElement) {
+            const playerProgress = this.lap + this.carT;
+            let rank = 1;
+            this.bots.forEach(bot => {
+                const botProgress = bot.lap + bot.carT;
+                if (botProgress > playerProgress) rank++;
+            });
+            this.rankElement.textContent = rank;
         }
     }
 
