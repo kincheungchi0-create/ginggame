@@ -816,35 +816,22 @@ class RacingGame {
 
     // ==================== 賽道標線 ====================
     createTrackLines() {
-        // 中央虛線
-        const dashCount = 60;
+        // 中央虛線 - 沿著實際賽道曲線放置
+        const dashCount = 80;
         const dashLength = 3;
         const dashMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const dashGeo = new THREE.PlaneGeometry(0.3, dashLength);
 
         for (let i = 0; i < dashCount; i++) {
-            const angle = (i / dashCount) * Math.PI * 2;
-            const nextAngle = ((i + 0.3) / dashCount) * Math.PI * 2;
+            const t = i / dashCount;
+            const pt = this.trackCurve.getPointAt(t);
+            const tangent = this.trackCurve.getTangentAt(t);
 
-            const curve = new THREE.EllipseCurve(
-                0, 0,
-                this.trackRadius, this.trackRadius,
-                angle, nextAngle,
-                false
-            );
-
-            const points = curve.getPoints(5);
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-
-            // 創建細長矩形作為虛線
-            const dashGeo = new THREE.PlaneGeometry(0.3, dashLength);
             const dash = new THREE.Mesh(dashGeo, dashMaterial);
-
-            const midAngle = (angle + nextAngle) / 2;
-            dash.position.x = Math.cos(midAngle) * this.trackRadius;
-            dash.position.z = Math.sin(midAngle) * this.trackRadius;
-            dash.position.y = 0.32;
+            dash.position.set(pt.x, pt.y + 0.05, pt.z);
             dash.rotation.x = -Math.PI / 2;
-            dash.rotation.z = -midAngle + Math.PI / 2;
+            // 對齊切線方向
+            dash.rotation.z = -Math.atan2(tangent.x, tangent.z);
 
             this.scene.add(dash);
         }
@@ -852,79 +839,69 @@ class RacingGame {
 
     // ==================== 賽道邊界與護欄 ====================
     createTrackBorders() {
-        // 外邊界 - 紅白相間護欄 + 品牌廣告
-        const outerRadius = this.trackRadius + this.trackWidth / 2 + 1;
-        const innerRadius = this.trackRadius - this.trackWidth / 2 - 1;
-        const postCount = 40;
+        if (!this.trackCurve) return;
 
-        // 護欄板幾何體 (Plane)
-        // 計算兩柱之間的弦長和角度
-        const segmentAngle = (Math.PI * 2) / postCount;
+        const postCount = 60; // 護欄數量
+        const halfWidth = this.trackWidth / 2 + 1; // 護欄在賽道外側
 
-        // 外圈板寬
-        const outerChord = 2 * outerRadius * Math.sin(segmentAngle / 2);
-        const outerPanelGeo = new THREE.PlaneGeometry(outerChord * 1.05, 1.5); // 稍微加寬以覆蓋縫隙
-
-        // 內圈板寬
-        const innerChord = 2 * innerRadius * Math.sin(segmentAngle / 2);
-        const innerPanelGeo = new THREE.PlaneGeometry(innerChord * 1.05, 1.5);
-
-        // 材質
+        // 品牌材質
         const borderBanners = this.brandingTextures.allBanners;
-
-        // Pre-create materials for checking performance (though creating inside loop is fine if count is small, caching is better)
-        // Let's create an array of materials
         const borderMats = borderBanners.map(tex => new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
 
         for (let i = 0; i < postCount; i++) {
-            const angle = (i / postCount) * Math.PI * 2;
-            const nextAngle = ((i + 1) / postCount) * Math.PI * 2;
-            const midAngle = (angle + nextAngle) / 2;
+            const t = i / postCount;
+            const tNext = ((i + 1) % postCount) / postCount;
+
+            const pt = this.trackCurve.getPointAt(t);
+            const ptNext = this.trackCurve.getPointAt(tNext);
+            const tangent = this.trackCurve.getTangentAt(t);
+
+            // 計算賽道的橫向方向（左右）
+            const up = new THREE.Vector3(0, 1, 0);
+            const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+
             const isRed = i % 2 === 0;
 
-            // 1. 護欄柱
-            this.createBarrierPost(
-                Math.cos(angle) * outerRadius,
-                Math.sin(angle) * outerRadius,
-                isRed ? 0xff3333 : 0xffffff
+            // 外側位置
+            const outerPos = pt.clone().add(side.clone().multiplyScalar(halfWidth));
+            const outerPosNext = ptNext.clone().add(
+                new THREE.Vector3().crossVectors(this.trackCurve.getTangentAt(tNext), up).normalize().multiplyScalar(halfWidth)
             );
 
-            this.createBarrierPost(
-                Math.cos(angle) * innerRadius,
-                Math.sin(angle) * innerRadius,
-                isRed ? 0x3333ff : 0xffffff
+            // 內側位置
+            const innerPos = pt.clone().sub(side.clone().multiplyScalar(halfWidth));
+            const innerPosNext = ptNext.clone().sub(
+                new THREE.Vector3().crossVectors(this.trackCurve.getTangentAt(tNext), up).normalize().multiplyScalar(halfWidth)
             );
 
-            // 2. 品牌護欄板 (連接柱子)
-            // Cycle through all banners
+            // 護欄柱
+            this.createBarrierPost(outerPos.x, outerPos.z, isRed ? 0xff3333 : 0xffffff);
+            this.createBarrierPost(innerPos.x, innerPos.z, isRed ? 0x3333ff : 0xffffff);
+
+            // 護欄板 - 外側
+            const outerMid = outerPos.clone().add(outerPosNext).multiplyScalar(0.5);
+            const outerLen = outerPos.distanceTo(outerPosNext);
+            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.05, 1.5);
             const panelMat = borderMats[i % borderMats.length];
 
-            // 外側護欄板
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
-            // 位置在弦的中點
-            const outerMidDist = outerRadius * Math.cos(segmentAngle / 2);
-            outerPanel.position.set(
-                Math.cos(midAngle) * outerMidDist,
-                1.0,
-                Math.sin(midAngle) * outerMidDist
-            );
-            // 旋轉面向圓心 (Plane預設面朝+Z)
-            outerPanel.rotation.y = -midAngle + Math.PI / 2;
-            // 讓Logo面向賽道內部 (外圈板，正面朝內)
-            outerPanel.lookAt(0, 1.0, 0);
+            outerPanel.position.set(outerMid.x, pt.y + 1.0, outerMid.z);
+            // 面向賽道內側
+            const outerDir = new THREE.Vector3().subVectors(outerPosNext, outerPos).normalize();
+            const outerLook = outerPanel.position.clone().add(side);
+            outerPanel.lookAt(outerLook.x, pt.y + 1.0, outerLook.z);
             this.scene.add(outerPanel);
 
-            // 內側護欄板
+            // 護欄板 - 內側
+            const innerMid = innerPos.clone().add(innerPosNext).multiplyScalar(0.5);
+            const innerLen = innerPos.distanceTo(innerPosNext);
+            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.05, 1.5);
+
             const innerPanel = new THREE.Mesh(innerPanelGeo, panelMat);
-            const innerMidDist = innerRadius * Math.cos(segmentAngle / 2);
-            innerPanel.position.set(
-                Math.cos(midAngle) * innerMidDist,
-                1.0,
-                Math.sin(midAngle) * innerMidDist
-            );
-            // 內圈板，需要面向外 (朝向賽道)
-            innerPanel.lookAt(0, 1.0, 0);
-            innerPanel.rotation.y += Math.PI; // 轉180度朝外
+            innerPanel.position.set(innerMid.x, pt.y + 1.0, innerMid.z);
+            // 面向賽道外側 (反方向)
+            const innerLook = innerPanel.position.clone().sub(side);
+            innerPanel.lookAt(innerLook.x, pt.y + 1.0, innerLook.z);
             this.scene.add(innerPanel);
         }
     }
