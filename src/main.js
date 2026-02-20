@@ -869,8 +869,8 @@ class RacingGame {
     createTrackBorders() {
         if (!this.trackCurve) return;
 
-        const postCount = 120; // 更密的護欄
-        const halfWidth = this.trackWidth / 2 + 1; // 護欄在賽道外側
+        const postCount = 300; // 高密度護欄，消除間隙
+        const halfWidth = this.trackWidth / 2 + 1;
 
         // 品牌材質
         const borderBanners = this.brandingTextures.allBanners;
@@ -909,27 +909,27 @@ class RacingGame {
             // 護欄板 - 外側
             const outerMid = outerPos.clone().add(outerPosNext).multiplyScalar(0.5);
             const outerLen = outerPos.distanceTo(outerPosNext);
-            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.05, 10);
+            const outerPanelGeo = new THREE.PlaneGeometry(outerLen * 1.3, 20);
             const panelMat = borderMats[i % borderMats.length];
 
             const outerPanel = new THREE.Mesh(outerPanelGeo, panelMat);
-            outerPanel.position.set(outerMid.x, pt.y + 5, outerMid.z);
+            outerPanel.position.set(outerMid.x, pt.y + 10, outerMid.z);
             // 面向賽道內側
             const outerDir = new THREE.Vector3().subVectors(outerPosNext, outerPos).normalize();
             const outerLook = outerPanel.position.clone().add(side);
-            outerPanel.lookAt(outerLook.x, pt.y + 5, outerLook.z);
+            outerPanel.lookAt(outerLook.x, pt.y + 10, outerLook.z);
             this.scene.add(outerPanel);
 
             // 護欄板 - 內側
             const innerMid = innerPos.clone().add(innerPosNext).multiplyScalar(0.5);
             const innerLen = innerPos.distanceTo(innerPosNext);
-            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.05, 10);
+            const innerPanelGeo = new THREE.PlaneGeometry(innerLen * 1.3, 20);
 
             const innerPanel = new THREE.Mesh(innerPanelGeo, panelMat);
-            innerPanel.position.set(innerMid.x, pt.y + 5, innerMid.z);
+            innerPanel.position.set(innerMid.x, pt.y + 10, innerMid.z);
             // 面向賽道外側 (反方向)
             const innerLook = innerPanel.position.clone().sub(side);
-            innerPanel.lookAt(innerLook.x, pt.y + 5, innerLook.z);
+            innerPanel.lookAt(innerLook.x, pt.y + 10, innerLook.z);
             this.scene.add(innerPanel);
         }
     }
@@ -1039,14 +1039,14 @@ class RacingGame {
 
     // ==================== 護欄柱 ====================
     createBarrierPost(x, z, color) {
-        const postGeo = new THREE.CylinderGeometry(0.8, 0.8, 10, 8);
+        const postGeo = new THREE.CylinderGeometry(1.0, 1.0, 20, 8);
         const postMat = new THREE.MeshStandardMaterial({
             color: color,
             roughness: 0.5,
             metalness: 0.3
         });
         const post = new THREE.Mesh(postGeo, postMat);
-        post.position.set(x, 5, z);
+        post.position.set(x, 10, z);
         post.castShadow = true;
         this.scene.add(post);
     }
