@@ -89,8 +89,8 @@ class BotCar {
         this.carT = startT;
         this.sideOffset = sideOffset;
         this.carSpeed = 0;
-        this.maxSpeed = 45 + Math.random() * 15; // 大幅提升極速 (原 30-40)
-        this.acceleration = 30; // 提升加速度 (原 15)
+        this.maxSpeed = 65 + Math.random() * 20; // 提升挑戰性極速
+        this.acceleration = 45; // 更高加速度
         this.trackLength = this.trackCurve.getLength();
         this.pushOffset = new THREE.Vector3(); // 用於碰撞反彈偏移
         this.boostTimer = 0; // 加速器計時
@@ -279,9 +279,9 @@ class RacingGame {
         // ==================== 車輛狀態 ====================
         this.carSpeed = 0;
         this.carAngle = 0;
-        this.maxSpeed = 50; // Very slow speed for easy control
-        this.acceleration = 25; // Gentle acceleration
-        this.handling = 2.5;
+        this.maxSpeed = 80; // 提升玩家速度
+        this.acceleration = 40; // 增加加速度
+        this.handling = 3.5; // 提高轉向能力以應對高難度賽道
         this.bots = [];
         this.boostPads = [];
         this.playerBoostTimer = 0;
@@ -435,23 +435,29 @@ class RacingGame {
         };
     }
 
-    // ==================== 創建賽道 (Figure-8) ====================
+    // ==================== 創建挑戰級長賽道 ====================
     createTrack() {
-        // 1. 生成 8 字型路徑
-        const points = [];
-        const segments = 400; // More segments for smoother curve
-        const size = 120;
+        // 1. 生成自定義控制點路徑
+        const controlPoints = [
+            new THREE.Vector3(0, 0, 300),       // 起點大直道
+            new THREE.Vector3(300, 5, 300),
+            new THREE.Vector3(500, 15, 100),    // 高速右彎上坡
+            new THREE.Vector3(450, 35, -200),   // 下坡急彎
+            new THREE.Vector3(250, 10, -350),
+            new THREE.Vector3(50, 5, -300),     // 谷底
+            new THREE.Vector3(-100, 15, -150),  // 連續彎道
+            new THREE.Vector3(-200, 20, -250),
+            new THREE.Vector3(-300, 10, -100),
+            new THREE.Vector3(-550, 30, 0),     // 高銀行彎位
+            new THREE.Vector3(-350, 15, 200),
+            new THREE.Vector3(-150, 5, 350),    // 降速彎
+            new THREE.Vector3(-50, 0, 300)      // 回到起點
+        ];
 
-        for (let i = 0; i <= segments; i++) {
-            const t = (i / segments) * Math.PI * 2;
-            const x = (size * Math.cos(t)) / (1 + Math.sin(t) * Math.sin(t));
-            const z = (size * Math.sin(t) * Math.cos(t)) / (1 + Math.sin(t) * Math.sin(t));
-            const y = (Math.sin(t) + 1) * 15; // Increased height slightly to 30 max
-            points.push(new THREE.Vector3(x, y, z));
-        }
-
-        this.trackCurve = new THREE.CatmullRomCurve3(points);
+        this.trackCurve = new THREE.CatmullRomCurve3(controlPoints);
         this.trackCurve.closed = true;
+
+        const segments = 1200; // 更長的賽道需要更多分段
 
         // 2. 自定義賽道 Mesh 生成 (Triangle Strip) - 解決扭曲問題
         const trackWidth = 22;
@@ -1032,14 +1038,16 @@ class RacingGame {
         this.skyBannerGroup = new THREE.Group();
         this.scene.add(this.skyBannerGroup);
 
-        const count = 12; // Number of floating banners
-        const height = 60; // Height in the sky
-        const radius = this.trackRadius + 40; // Wider than track
+        const count = 16; // Number of floating banners
+        const height = 80; // Higher in the sky
+
+        const curvePoints = this.trackCurve.getSpacedPoints(count);
 
         for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
+            // Place them near track points but elevated
+            const pt = curvePoints[i];
+            const x = pt.x + (Math.random() - 0.5) * 100;
+            const z = pt.z + (Math.random() - 0.5) * 100;
 
             // Texture
             const tex = this.brandingTextures.allBanners[i % this.brandingTextures.allBanners.length];
@@ -1249,19 +1257,29 @@ class RacingGame {
 
     // ==================== 樹林區域廣告牌 ====================
     createTreeBanners() {
-        // Scatter banners randomly in the environment, similar to trees
-        const count = 150; // Increased count
-        const width = 500; // Expanded area
-        const depth = 500;
+        if (!this.trackCurve) return;
+        const curvePoints = this.trackCurve.getSpacedPoints(150);
+
+        // Scatter banners randomly in the environment
+        const count = 200;
+        const width = 1600;
+        const depth = 1600;
 
         for (let i = 0; i < count; i++) {
             const x = (Math.random() - 0.5) * width;
             const z = (Math.random() - 0.5) * depth;
 
-            // Simple distance check from center (track area)
-            // Track radius is 80.
-            const dist = Math.sqrt(x * x + z * z);
-            if (dist < 90) continue; // Allow slightly closer to track edge
+            let tooClose = false;
+            for (const pt of curvePoints) {
+                const dx = x - pt.x;
+                const dz = z - pt.z;
+                if (dx * dx + dz * dz < 1225) { // 35 units distance sq
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (tooClose) continue;
 
             const group = new THREE.Group();
             group.position.set(x, 0, z);
@@ -1451,8 +1469,8 @@ class RacingGame {
 
     // ==================== 創建環境 ====================
     createEnvironment() {
-        // 地面
-        const groundGeo = new THREE.PlaneGeometry(500, 500);
+        // 地面 (擴大以容納新賽道)
+        const groundGeo = new THREE.PlaneGeometry(3000, 3000);
         const groundMat = new THREE.MeshStandardMaterial({
             color: 0x1a2a1a,
             roughness: 1,
@@ -1463,18 +1481,6 @@ class RacingGame {
         ground.position.y = -0.1;
         ground.receiveShadow = true;
         this.scene.add(ground);
-
-        // 中央草坪
-        const innerGrassGeo = new THREE.CircleGeometry(this.trackRadius - this.trackWidth / 2 - 2, 64);
-        const grassMat = new THREE.MeshStandardMaterial({
-            color: 0x2d4a2d,
-            roughness: 0.9
-        });
-        const innerGrass = new THREE.Mesh(innerGrassGeo, grassMat);
-        innerGrass.rotation.x = -Math.PI / 2;
-        innerGrass.position.y = 0.05;
-        innerGrass.receiveShadow = true;
-        this.scene.add(innerGrass);
 
         // 天空球
         const skyGeo = new THREE.SphereGeometry(400, 32, 32);
@@ -1543,20 +1549,30 @@ class RacingGame {
 
     // ==================== 場景裝飾 ====================
     createScenery() {
-        // 在賽道外部添加一些樹木
-        const treePositions = [];
-        for (let i = 0; i < 30; i++) {
-            const angle = (i / 30) * Math.PI * 2;
-            const distance = this.trackRadius + this.trackWidth / 2 + 15 + Math.random() * 20;
-            treePositions.push({
-                x: Math.cos(angle) * distance,
-                z: Math.sin(angle) * distance
-            });
-        }
+        if (!this.trackCurve) return;
+        const curvePoints = this.trackCurve.getSpacedPoints(150);
 
-        treePositions.forEach(pos => {
-            this.createTree(pos.x, pos.z);
-        });
+        // 隨機在廣闊區域放置樹木，並確保不位於賽道上
+        for (let i = 0; i < 400; i++) {
+            const x = (Math.random() - 0.5) * 1600;
+            const z = (Math.random() - 0.5) * 1600;
+            const treePos = new THREE.Vector3(x, 0, z);
+
+            let tooClose = false;
+            for (const pt of curvePoints) {
+                // Ignore height diff for basic track collision
+                const dx = treePos.x - pt.x;
+                const dz = treePos.z - pt.z;
+                if (dx * dx + dz * dz < 900) { // 30 units squared (keep some margin from edge)
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (!tooClose) {
+                this.createTree(x, z);
+            }
+        }
     }
 
     // ==================== 創建樹木 ====================
@@ -1646,9 +1662,8 @@ class RacingGame {
         ctx.beginPath();
 
         const points = this.trackCurve.getPoints(100);
-        // Scale factor: Track is approx 240 wide (size=120). Map is 150.
-        // Scale = 150 / 300 = 0.5
-        const scale = 0.4;
+        // Track bounds are approx -550 to 500. Minimap is 150x150.
+        const scale = 0.12;
         const cx = w / 2;
         const cy = h / 2;
 
