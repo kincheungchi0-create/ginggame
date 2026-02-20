@@ -94,6 +94,8 @@ class BotCar {
         this.trackLength = this.trackCurve.getLength();
         this.pushOffset = new THREE.Vector3(); // 用於碰撞反彈偏移
         this.boostTimer = 0; // 加速器計時
+        this.carVelocityY = 0;
+        this.gravity = -50; // 重力
 
         this.mesh = this.createMesh(color);
         this.scene.add(this.mesh);
@@ -170,9 +172,32 @@ class BotCar {
         return group;
     }
 
-    updateHeight(targetY) {
+    updateHeight(targetY, dt) {
+        const oldY = this.mesh.position.y;
+
+        // 應用重力
+        this.carVelocityY += this.gravity * dt;
+        this.mesh.position.y += this.carVelocityY * dt;
+
         if (targetY !== undefined) {
-            this.mesh.position.y += (targetY - this.mesh.position.y) * 0.5;
+            const floorY = targetY;
+            if (this.mesh.position.y <= floorY + 0.5) {
+                this.mesh.position.y = floorY;
+
+                let terrainVelY = (floorY - oldY) / dt;
+                terrainVelY = Math.min(Math.max(terrainVelY, -100), 100);
+
+                if (this.carVelocityY < -15 && (this.carVelocityY - terrainVelY) < -15) {
+                    this.carVelocityY = terrainVelY * 0.5; // 簡單緩衝
+                } else {
+                    this.carVelocityY = terrainVelY; // 繼承坡度向上速度以起飛
+                }
+            }
+        } else {
+            if (this.mesh.position.y < -100) {
+                this.mesh.position.y = 0;
+                this.carVelocityY = 0;
+            }
         }
     }
 
@@ -201,10 +226,12 @@ class BotCar {
         const up = new THREE.Vector3(0, 1, 0);
         const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
 
+        // Preserve current Y for gravity physics
+        const currentY = this.mesh.position.y;
         // Apply position
         this.mesh.position.copy(pos).add(side.clone().multiplyScalar(this.sideOffset));
-        // Reset Y temporarily to avoid cumulative errors before height update
-        this.mesh.position.y = pos.y;
+        // Restore Y
+        this.mesh.position.y = currentY;
 
         // 套用反彈偏移並逐漸衰減
         this.mesh.position.add(this.pushOffset);
@@ -213,6 +240,9 @@ class BotCar {
 
         // Fix Orientation: Look forward relative to CURRENT position
         const lookTarget = this.mesh.position.clone().add(tangent);
+        if (this.carVelocityY < -5) {
+            lookTarget.y += this.carVelocityY * 0.05; // 空中掉落時車頭微垂
+        }
         this.mesh.lookAt(lookTarget);
 
         // Rotate wheels
@@ -279,6 +309,8 @@ class RacingGame {
         // ==================== 車輛狀態 ====================
         this.carSpeed = 0;
         this.carAngle = 0;
+        this.carVelocityY = 0; // 垂直速度
+        this.gravity = -50;    // 重力值
         this.maxSpeed = 80; // 提升玩家速度
         this.acceleration = 40; // 增加加速度
         this.handling = 3.5; // 提高轉向能力以應對高難度賽道
@@ -450,8 +482,9 @@ class RacingGame {
             new THREE.Vector3(-300, 10, -100),
             new THREE.Vector3(-550, 30, 0),     // 高銀行彎位
             new THREE.Vector3(-350, 15, 200),
-            new THREE.Vector3(-150, 5, 350),    // 降速彎
-            new THREE.Vector3(-50, 0, 300)      // 回到起點
+            new THREE.Vector3(-200, 5, 350),    // 準備起飛
+            new THREE.Vector3(-100, 40, 320),   // 🔼起飛跳台 (JUMP!)
+            new THREE.Vector3(-30, 0, 300)      // 🔽著陸回到起點
         ];
 
         this.trackCurve = new THREE.CatmullRomCurve3(controlPoints);
@@ -2129,7 +2162,7 @@ class RacingGame {
         }
 
         // 3. Update Y Position (Raycast + Fallback)
-        this.updateCarHeight(curvePt);
+        this.updateCarHeight(dt, curvePt);
 
         // 4. Update Rotation
         // We set carAngle based on rotation.y to keep it in sync
@@ -2142,12 +2175,18 @@ class RacingGame {
         });
     }
 
-    updateCarHeight(curvePt) {
+    updateCarHeight(dt, curvePt) {
         this.raycaster = this.raycaster || new THREE.Raycaster();
+
+        const oldY = this.car.position.y; // 保存原高度
+
+        // 應用重力
+        this.carVelocityY += this.gravity * dt;
+        this.car.position.y += this.carVelocityY * dt;
 
         // Raycast down from high up
         const rayOrigin = this.car.position.clone();
-        rayOrigin.y = 50;
+        rayOrigin.y = 200; // 從極高處發射，以確保找到位於下方但高於曲線的賽道
         this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
         const hits = this.raycaster.intersectObject(this.trackMesh);
@@ -2159,39 +2198,71 @@ class RacingGame {
             for (const hit of hits) {
                 // Check if this hit is plausible relative to curve height
                 const diff = Math.abs(hit.point.y - curvePt.y);
-                if (diff < 8 && diff < minDiff) {
+                if (diff < 40 && diff < minDiff) { // 放寬容錯至40，容許極陡峭跳台
                     minDiff = diff;
                     validHit = hit;
                 }
             }
         }
 
+        let targetY = curvePt.y;
         if (validHit) {
-            const hit = validHit;
-            const targetY = hit.point.y;
-            this.car.position.y += (targetY - this.car.position.y) * 0.5; // Faster response
+            targetY = validHit.point.y;
+        }
+
+        const floorY = targetY;
+        const isGrounded = this.car.position.y <= floorY + 0.5;
+
+        if (isGrounded) {
+            // 接觸地面
+            this.car.position.y = floorY;
+
+            // 計算地形給予的垂直速度 (坡度向上的動量)
+            let terrainVelY = (floorY - oldY) / dt;
+            terrainVelY = Math.min(Math.max(terrainVelY, -150), 150); // 防爆衝限制
+
+            if (this.carVelocityY < -15 && (this.carVelocityY - terrainVelY) < -15) {
+                // 落地緩衝與震動
+                this.carVelocityY = terrainVelY * 0.5;
+                if (this.camera) this.camera.position.y -= 1;
+            } else {
+                // 貼地沿著坡度行駛，繼承垂直速度來準備騰空
+                this.carVelocityY = terrainVelY;
+            }
 
             // Align to normal
-            const n = hit.face.normal.clone();
-            const targetRot = new THREE.Object3D();
-            targetRot.position.copy(this.car.position);
-            const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
-            const fwdProj = fwd.clone().sub(n.clone().multiplyScalar(fwd.dot(n))).normalize();
-            targetRot.up.copy(n);
-            targetRot.lookAt(targetRot.position.clone().add(fwdProj));
-            this.car.quaternion.slerp(targetRot.quaternion, 0.2);
+            if (validHit) {
+                const n = validHit.face.normal.clone();
+                const targetRot = new THREE.Object3D();
+                targetRot.position.copy(this.car.position);
+                const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
+                const fwdProj = fwd.clone().sub(n.clone().multiplyScalar(fwd.dot(n))).normalize();
+                if (fwdProj.lengthSq() > 0.01) {
+                    targetRot.up.copy(n);
+                    targetRot.lookAt(targetRot.position.clone().add(fwdProj));
+                    this.car.quaternion.slerp(targetRot.quaternion, 0.3);
+                }
+            } else {
+                this.alignFallback(curvePt);
+            }
         } else {
-            // Fallback
-            const targetY = curvePt.y;
-            this.car.position.y = targetY;
-
-            // Reset rotation
+            // 在空中飛行！
+            // 讓車頭隨著垂直速度微微調整俯仰角，模擬真實物理姿態
             const targetRot = new THREE.Object3D();
             targetRot.position.copy(this.car.position);
-            const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
+            const pitchDown = Math.max(-0.5, this.carVelocityY * 0.01);
+            const fwd = new THREE.Vector3(Math.sin(this.carAngle), pitchDown, Math.cos(this.carAngle)).normalize();
             targetRot.lookAt(targetRot.position.clone().add(fwd));
-            this.car.quaternion.slerp(targetRot.quaternion, 0.1);
+            this.car.quaternion.slerp(targetRot.quaternion, 0.05);
         }
+    }
+
+    alignFallback(curvePt) {
+        const targetRot = new THREE.Object3D();
+        targetRot.position.copy(this.car.position);
+        const fwd = new THREE.Vector3(Math.sin(this.carAngle), 0, Math.cos(this.carAngle));
+        targetRot.lookAt(targetRot.position.clone().add(fwd));
+        this.car.quaternion.slerp(targetRot.quaternion, 0.1);
     }
 
     resetCar() {
@@ -2442,7 +2513,9 @@ class RacingGame {
                     this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
                     const hits = this.raycaster.intersectObject(this.trackMesh);
                     if (hits.length > 0) {
-                        bot.updateHeight(hits[0].point.y);
+                        bot.updateHeight(hits[0].point.y, dt);
+                    } else {
+                        bot.updateHeight(undefined, dt); // 空中
                     }
                 }
             });
