@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
+    "lodash": "^4.17.23",
     "three": "^0.182.0"
   }
 }
