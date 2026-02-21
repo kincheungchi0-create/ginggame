@@ -1489,6 +1489,19 @@ class RacingGame {
         this.car.add(pipeL);
         this.car.add(pipeR);
 
+        // 卡丁車旗幟 (Flag)
+        const flagPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.5, 8);
+        const flagPoleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 });
+        const flagPole = new THREE.Mesh(flagPoleGeo, flagPoleMat);
+        flagPole.position.set(-0.8, 2.5, -2.0); // 左後方高處
+        this.car.add(flagPole);
+
+        const flagGeo = new THREE.PlaneGeometry(1.2, 0.8);
+        const flagMat = new THREE.MeshBasicMaterial({ map: carPicTexture, side: THREE.DoubleSide });
+        const flag = new THREE.Mesh(flagGeo, flagMat);
+        flag.position.set(-0.2, 3.3, -2.0); // 旗幟本體在旗桿右側
+        this.car.add(flag);
+
         // 車輪 - Bigger and wider
         this.wheels = [];
         const wheelGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.55, 32);
