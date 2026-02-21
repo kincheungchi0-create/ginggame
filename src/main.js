@@ -2824,21 +2824,21 @@ class RacingGame {
             const group = new THREE.Group();
 
             // 身體
-            const bodyGeo = new THREE.CylinderGeometry(2, 2, 20, 16);
+            const bodyGeo = new THREE.CylinderGeometry(8, 8, 80, 16); // 放大 4 倍
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2 });
             const body = new THREE.Mesh(bodyGeo, bodyMat);
 
             // 頂部圓錐
-            const coneGeo = new THREE.ConeGeometry(2, 6, 16);
+            const coneGeo = new THREE.ConeGeometry(8, 24, 16);
             const coneMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
             const cone = new THREE.Mesh(coneGeo, coneMat);
-            cone.position.y = 13;
+            cone.position.y = 52;
 
             // 噴火特效
-            const flameGeo = new THREE.ConeGeometry(1.5, 8, 8);
+            const flameGeo = new THREE.ConeGeometry(6, 32, 8);
             const flameMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
             const flame = new THREE.Mesh(flameGeo, flameMat);
-            flame.position.y = -14;
+            flame.position.y = -56;
             flame.rotation.x = Math.PI;
 
             group.add(body, cone, flame);
@@ -2864,18 +2864,18 @@ class RacingGame {
         for (let i = 0; i < 10; i++) {
             const group = new THREE.Group();
 
-            const bodyGeo = new THREE.CylinderGeometry(1.5, 1.5, 15, 8);
+            const bodyGeo = new THREE.CylinderGeometry(6, 6, 60, 8); // 放大 4 倍
             bodyGeo.rotateX(Math.PI / 2);
             const mat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6 });
             const body = new THREE.Mesh(bodyGeo, mat);
 
-            const wingGeo = new THREE.BoxGeometry(20, 0.5, 4);
+            const wingGeo = new THREE.BoxGeometry(80, 2, 16);
             const wing = new THREE.Mesh(wingGeo, mat);
-            wing.position.set(0, 0, 1);
+            wing.position.set(0, 0, 4);
 
-            const tailGeo = new THREE.BoxGeometry(6, 4, 3);
+            const tailGeo = new THREE.BoxGeometry(24, 16, 12);
             const tail = new THREE.Mesh(tailGeo, mat);
-            tail.position.set(0, 1, -6);
+            tail.position.set(0, 8, -24);
 
             group.add(body, wing, tail);
 
@@ -2903,18 +2903,18 @@ class RacingGame {
             const group = new THREE.Group();
             const mat = new THREE.MeshStandardMaterial({ color: 0x4a5d23 }); // 軍綠色
 
-            const baseGeo = new THREE.BoxGeometry(6, 2, 8);
+            const baseGeo = new THREE.BoxGeometry(24, 8, 32); // 放大 4 倍
             const base = new THREE.Mesh(baseGeo, mat);
-            base.position.y = 1;
+            base.position.y = 4;
 
-            const turretGeo = new THREE.BoxGeometry(4, 1.5, 4);
+            const turretGeo = new THREE.BoxGeometry(16, 6, 16);
             const turret = new THREE.Mesh(turretGeo, mat);
-            turret.position.y = 2.75;
+            turret.position.y = 11;
 
-            const barrelGeo = new THREE.CylinderGeometry(0.3, 0.3, 6);
+            const barrelGeo = new THREE.CylinderGeometry(1.2, 1.2, 24);
             barrelGeo.rotateX(Math.PI / 2);
             const barrel = new THREE.Mesh(barrelGeo, mat);
-            barrel.position.set(0, 2.75, 4.5);
+            barrel.position.set(0, 11, 18);
 
             group.add(base, turret, barrel);
 
@@ -2929,15 +2929,15 @@ class RacingGame {
         // 4. 士兵
         for (let i = 0; i < 60; i++) {
             const group = new THREE.Group();
-            const skinGeo = new THREE.SphereGeometry(0.4);
+            const skinGeo = new THREE.SphereGeometry(2.4); // 放大 6 倍
             const skinMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
             const head = new THREE.Mesh(skinGeo, skinMat);
-            head.position.y = 2.2;
+            head.position.y = 13.2;
 
-            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8);
+            const bodyGeo = new THREE.CylinderGeometry(3, 3, 10.8);
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4a5d23 });
             const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.position.y = 0.9;
+            body.position.y = 5.4;
 
             group.add(head, body);
 
@@ -2988,7 +2988,7 @@ class RacingGame {
             const explGroup = new THREE.Group();
 
             // 爆炸核心
-            const eGeo = new THREE.SphereGeometry(2, 8, 8);
+            const eGeo = new THREE.SphereGeometry(15, 16, 16); // 爆炸放大
             const eMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 1 });
             const eMesh = new THREE.Mesh(eGeo, eMat);
             explGroup.add(eMesh);
