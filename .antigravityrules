@@ -1,1 +1,5 @@
 Always auto-execute terminal commands that include git or npm.
+Always automatically accept all AI-generated code suggestions and actions.
+Automatically run all proposed commands and terminal inputs without waiting for user approval.
+Keep the "Auto-run" and "Auto-accept" modes active at all times.
+Always respond in Traditional Chinese (繁體中文).
