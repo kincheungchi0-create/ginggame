@@ -764,9 +764,9 @@ class RacingGame {
         this.createTrackBorders();
         this.createTrackLines();
         this.createSkyBanners();
-        this.createFloorBanners();
+        // this.createFloorBanners(); // 依需求移除地面圖片
         this.createTreeBanners();
-        this.createRoadDecals();
+        // this.createRoadDecals(); // 依需求移除地面圖片
 
         // 5. 起點
         this.createStartLine();
@@ -787,7 +787,7 @@ class RacingGame {
         const boostTexture = new THREE.TextureLoader().load('/accelerate.png');
         boostTexture.anisotropy = 16;
 
-        const padGeo = new THREE.PlaneGeometry(10, 6);
+        const padGeo = new THREE.PlaneGeometry(30, 20); // 放大加速帶
         const padMat = new THREE.MeshBasicMaterial({
             map: boostTexture,
             transparent: true,
@@ -807,7 +807,7 @@ class RacingGame {
             pad.add(mesh);
 
             pad.position.copy(layout.position);
-            pad.lookAt(layout.position.clone().add(layout.tangent));
+            pad.lookAt(layout.position.clone().sub(layout.tangent)); // 旋轉 180 度
 
             this.scene.add(pad);
             this.boostPads.push({ mesh: pad, pos: layout.position.clone() });
@@ -1990,20 +1990,19 @@ class RacingGame {
             #touch-controls {
                 position: fixed;
                 bottom: 30px;
-                left: 0;
-                right: 0;
+                left: 30px;
                 display: flex;
                 flex-direction: column;
-                align-items: center;
+                align-items: flex-start;
                 pointer-events: none;
                 z-index: 1000;
             }
             
             #joystick-zone {
-                width: 100%;
+                width: 200px;
                 height: 150px;
                 display: flex;
-                justify-content: center;
+                justify-content: flex-start;
                 align-items: center;
                 pointer-events: auto;
                 touch-action: none; /* Prevent scrolling */
