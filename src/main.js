@@ -1967,25 +1967,19 @@ class RacingGame {
     setupTouchControls() {
         // 手機模式啟用自動加速
         this.mobileAutoAccelerate = true;
+        this.joystickTurn = 0; // -1 (left) to 1 (right)
 
-        // 創建觸控控制容器 - 只有方向控制
+        // 創建觸控控制容器 - 搖桿
         const touchContainer = document.createElement('div');
         touchContainer.id = 'touch-controls';
         touchContainer.innerHTML = `
-            <div id="joystick-left">
-                <div id="joystick-base-left">
-                    <div id="joystick-knob-left">◀</div>
+            <div id="joystick-zone">
+                <div id="joystick-base">
+                    <div id="joystick-knob"></div>
                 </div>
-                <span class="direction-label">LEFT</span>
             </div>
             <div id="touch-info">
                 <span>🏎️ 自動加速中</span>
-            </div>
-            <div id="joystick-right">
-                <div id="joystick-base-right">
-                    <div id="joystick-knob-right">▶</div>
-                </div>
-                <span class="direction-label">RIGHT</span>
             </div>
         `;
         document.body.appendChild(touchContainer);
@@ -1995,64 +1989,61 @@ class RacingGame {
         style.textContent = `
             #touch-controls {
                 position: fixed;
-                bottom: 20px;
+                bottom: 30px;
                 left: 0;
                 right: 0;
                 display: flex;
-                justify-content: space-between;
+                flex-direction: column;
                 align-items: center;
-                padding: 0 20px;
                 pointer-events: none;
                 z-index: 1000;
             }
             
-            #joystick-left, #joystick-right {
+            #joystick-zone {
+                width: 100%;
+                height: 150px;
                 display: flex;
-                flex-direction: column;
+                justify-content: center;
                 align-items: center;
                 pointer-events: auto;
+                touch-action: none; /* Prevent scrolling */
             }
             
-            #joystick-base-left, #joystick-base-right {
-                width: 80px;
-                height: 80px;
-                background: rgba(0, 255, 136, 0.3);
-                border: 3px solid rgba(0, 255, 136, 0.8);
-                border-radius: 50%;
+            #joystick-base {
+                width: 200px;
+                height: 60px;
+                background: rgba(0, 255, 136, 0.2);
+                border: 2px solid rgba(0, 255, 136, 0.5);
+                border-radius: 30px;
+                position: relative;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                transition: transform 0.1s, background 0.1s;
             }
             
-            #joystick-base-left:active, #joystick-base-right:active {
-                transform: scale(0.9);
-                background: rgba(0, 255, 136, 0.6);
-            }
-            
-            #joystick-knob-left, #joystick-knob-right {
-                font-size: 32px;
-                color: white;
-                text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
-            }
-            
-            .direction-label {
-                color: rgba(255, 255, 255, 0.8);
-                font-size: 14px;
-                margin-top: 8px;
-                font-weight: bold;
+            #joystick-knob {
+                width: 60px;
+                height: 60px;
+                background: rgba(0, 255, 136, 0.8);
+                border-radius: 50%;
+                position: absolute;
+                box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+                transition: transform 0.1s;
+                left: 50%;
+                transform: translateX(-50%);
             }
             
             #touch-info {
+                margin-top: 20px;
                 background: rgba(0, 0, 0, 0.5);
-                padding: 10px 20px;
-                border-radius: 20px;
-                border: 2px solid rgba(0, 255, 136, 0.5);
+                padding: 5px 15px;
+                border-radius: 15px;
+                border: 1px solid rgba(0, 255, 136, 0.3);
             }
             
             #touch-info span {
                 color: #00ff88;
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
             }
             
@@ -2064,24 +2055,49 @@ class RacingGame {
         `;
         document.head.appendChild(style);
 
-        // 左方向按鈕
-        const leftBtn = document.getElementById('joystick-base-left');
-        leftBtn.addEventListener('touchstart', (e) => {
+        // 搖桿邏輯
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickKnob = document.getElementById('joystick-knob');
+        const maxRadius = 70; // (200 - 60) / 2 = 70. max drag distance
+        let touchStartX = 0;
+        let isDragging = false;
+
+        const resetJoystick = () => {
+            isDragging = false;
+            this.joystickTurn = 0;
+            joystickKnob.style.transform = `translateX(-50%)`;
+            joystickKnob.style.left = '50%';
+        };
+
+        joystickZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            this.keys.left = true;
+            isDragging = true;
+            touchStartX = e.touches[0].clientX;
         }, { passive: false });
-        leftBtn.addEventListener('touchend', () => {
-            this.keys.left = false;
+
+        joystickZone.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            let currentX = e.touches[0].clientX;
+            let deltaX = currentX - touchStartX;
+
+            // limit to maxRadius
+            if (deltaX > maxRadius) deltaX = maxRadius;
+            if (deltaX < -maxRadius) deltaX = -maxRadius;
+
+            this.joystickTurn = deltaX / maxRadius; // -1 to 1
+
+            joystickKnob.style.transform = 'none'; // reset translateX
+            joystickKnob.style.left = `calc(50% + ${deltaX}px - 30px)`; // -30px to center the 60px knob on the point
+        }, { passive: false });
+
+        joystickZone.addEventListener('touchend', () => {
+            resetJoystick();
         });
 
-        // 右方向按鈕
-        const rightBtn = document.getElementById('joystick-base-right');
-        rightBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.keys.right = true;
-        }, { passive: false });
-        rightBtn.addEventListener('touchend', () => {
-            this.keys.right = false;
+        joystickZone.addEventListener('touchcancel', () => {
+            resetJoystick();
         });
     }
 
@@ -2134,19 +2150,19 @@ class RacingGame {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100 %;
+            height: 100 %;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 150px;
-            font-weight: bold;
+            justify - content: center;
+            align - items: center;
+            font - size: 150px;
+            font - weight: bold;
             color: #00ff88;
-            text-shadow: 0 0 30px #00ff88;
-            z-index: 1000;
-            pointer-events: none;
+            text - shadow: 0 0 30px #00ff88;
+            z - index: 1000;
+            pointer - events: none;
             transition: transform 0.2s;
-        `;
+            `;
         document.body.appendChild(overlay);
 
         let count = 3;
@@ -2220,6 +2236,10 @@ class RacingGame {
             }
             if (this.keys.right) {
                 this.carAngle -= this.handling * dt * turnDirection;
+            }
+            if (this.joystickTurn) {
+                // this.joystickTurn 是 -1 到 1 之間的值
+                this.carAngle -= this.joystickTurn * this.handling * dt * turnDirection;
             }
         }
 
@@ -2531,7 +2551,7 @@ class RacingGame {
             const seconds = Math.floor(this.gameTime % 60);
             const ms = Math.floor((this.gameTime % 1) * 100);
             this.timeElement.textContent =
-                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')} `;
         }
 
         // 排名計算
@@ -2554,17 +2574,17 @@ class RacingGame {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.85);
+            width: 100 %;
+            height: 100 %;
+            background: rgba(0, 0, 0, 0.85);
             display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            flex - direction: column;
+            justify - content: center;
+            align - items: center;
             color: #00ff88;
-            font-family: 'Orbitron', sans-serif;
-            z-index: 2000;
-        `;
+            font - family: 'Orbitron', sans - serif;
+            z - index: 2000;
+            `;
 
         const title = document.createElement('h1');
         title.textContent = 'FINISHED!';
@@ -2592,7 +2612,7 @@ class RacingGame {
         }
 
         const rankDisplay = document.createElement('h2');
-        rankDisplay.innerHTML = `Rank: <span style="color: ${rankColor}; font-size: 1.5em">${finalRank}</span> / ${totalCars}`;
+        rankDisplay.innerHTML = `Rank: <span style="color: ${rankColor}; font-size: 1.5em">${finalRank}</span> / ${totalCars} `;
         rankDisplay.style.color = '#ffffff';
         rankDisplay.style.marginTop = '10px';
         rankDisplay.style.fontSize = '40px';
@@ -2602,27 +2622,27 @@ class RacingGame {
         msgDisplay.style.color = rankColor;
         msgDisplay.style.marginTop = '20px';
         msgDisplay.style.fontSize = '30px';
-        msgDisplay.style.textShadow = `0 0 10px ${rankColor}`;
+        msgDisplay.style.textShadow = `0 0 10px ${rankColor} `;
 
         const time = document.createElement('h2');
-        time.textContent = `Total Time: ${this.timeElement.textContent}`;
+        time.textContent = `Total Time: ${this.timeElement.textContent} `;
         time.style.color = '#aaaaaa';
         time.style.marginTop = '30px';
 
         const btn = document.createElement('button');
         btn.textContent = 'Play Again';
         btn.style.cssText = `
-            margin-top: 50px;
+            margin - top: 50px;
             padding: 15px 40px;
-            font-size: 24px;
+            font - size: 24px;
             background: #00ff88;
             color: #000;
             border: none;
-            border-radius: 30px;
+            border - radius: 30px;
             cursor: pointer;
-            font-weight: bold;
+            font - weight: bold;
             transition: transform 0.2s, background 0.2s;
-        `;
+            `;
         btn.onmouseover = () => {
             btn.style.transform = 'scale(1.1)';
             btn.style.background = '#00cc66';
