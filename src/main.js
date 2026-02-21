@@ -109,48 +109,67 @@ class BotCar {
 
     createMesh(color) {
         const group = new THREE.Group();
-        // Body
-        const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 4.5);
+        // Body (Taller Kart)
+        const bodyGeo = new THREE.BoxGeometry(1.4, 0.5, 3.5);
         const bodyMat = new THREE.MeshStandardMaterial({
             color,
-            metalness: 0.8,
-            roughness: 0.2
+            metalness: 0.6,
+            roughness: 0.3
         });
         const body = new THREE.Mesh(bodyGeo, bodyMat);
         body.position.y = 0.6;
         body.castShadow = true;
         group.add(body);
 
-        // Cabin
-        const cabinGeo = new THREE.BoxGeometry(1.8, 0.6, 2);
-        const cabinMat = new THREE.MeshStandardMaterial({
-            color: 0x111122,
-            metalness: 0.9
-        });
-        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-        cabin.position.set(0, 1.1, -0.3);
-        group.add(cabin);
+        // Side Pods
+        const sidePodGeo = new THREE.BoxGeometry(2.4, 0.4, 1.8);
+        const sidePod = new THREE.Mesh(sidePodGeo, bodyMat);
+        sidePod.position.set(0, 0.6, 0.2);
+        sidePod.castShadow = true;
+        group.add(sidePod);
 
-        // Windshield
-        const windshieldGeo = new THREE.BoxGeometry(1.7, 0.5, 0.1);
-        const windshieldMat = new THREE.MeshStandardMaterial({
-            color: 0x88ccff,
-            metalness: 0.1,
-            roughness: 0.1,
-            transparent: true,
-            opacity: 0.5
-        });
-        const windshield = new THREE.Mesh(windshieldGeo, windshieldMat);
-        windshield.position.set(0, 1.1, 0.7);
-        windshield.rotation.x = 0.3;
-        group.add(windshield);
+        // Seat
+        const seatGeo = new THREE.BoxGeometry(1.0, 1.4, 0.6);
+        const seatMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const seat = new THREE.Mesh(seatGeo, seatMat);
+        seat.position.set(0, 1.3, -0.6);
+        seat.castShadow = true;
+        group.add(seat);
+
+        // Nose
+        const noseGeo = new THREE.BoxGeometry(1.2, 0.3, 1.5);
+        const nose = new THREE.Mesh(noseGeo, bodyMat);
+        nose.position.set(0, 0.5, 2.0);
+        nose.rotation.x = 0.3;
+        nose.castShadow = true;
+        group.add(nose);
+
+        // Engine Rear
+        const engineGeo = new THREE.BoxGeometry(1.2, 0.8, 1.0);
+        const engineMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8 });
+        const engine = new THREE.Mesh(engineGeo, engineMat);
+        engine.position.set(0, 0.9, -1.8);
+        engine.castShadow = true;
+        group.add(engine);
+
+        // Exhaust Pipes
+        const pipeGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.2, 16);
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 1.0 });
+        const pipeL = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeL.rotation.x = Math.PI / 2 + 0.3;
+        pipeL.position.set(-0.4, 1.3, -2.4);
+        const pipeR = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeR.rotation.x = Math.PI / 2 + 0.3;
+        pipeR.position.set(0.4, 1.3, -2.4);
+        group.add(pipeL);
+        group.add(pipeR);
 
         // Wheels
-        const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 12);
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const wheelGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.55, 16);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
         const wheelPositions = [
-            { x: -1.2, y: 0.55, z: 1.3 }, { x: 1.2, y: 0.55, z: 1.3 },
-            { x: -1.2, y: 0.55, z: -1.3 }, { x: 1.2, y: 0.55, z: -1.3 }
+            { x: -1.3, y: 0.65, z: 1.5 }, { x: 1.3, y: 0.65, z: 1.5 },
+            { x: -1.3, y: 0.65, z: -1.5 }, { x: 1.3, y: 0.65, z: -1.5 }
         ];
         wheelPositions.forEach(pos => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
@@ -164,10 +183,10 @@ class BotCar {
         const lightGeo = new THREE.BoxGeometry(0.4, 0.2, 0.1);
         const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffcc });
         const leftHead = new THREE.Mesh(lightGeo, headLightMat);
-        leftHead.position.set(-0.7, 0.6, 2.3);
+        leftHead.position.set(-0.8, 0.6, 2.55);
         group.add(leftHead);
         const rightHead = new THREE.Mesh(lightGeo, headLightMat);
-        rightHead.position.set(0.7, 0.6, 2.3);
+        rightHead.position.set(0.8, 0.6, 2.55);
         group.add(rightHead);
 
         return group;
@@ -511,19 +530,20 @@ class RacingGame {
             new THREE.Vector3(0, 0, 300),       // 起點大直道
             new THREE.Vector3(150, 5, 300),     // 微上坡
             new THREE.Vector3(300, 2, 280),     // 平緩右彎
-            new THREE.Vector3(450, 15, 150),    // 緩上坡彎道
-            new THREE.Vector3(500, 35, 0),      // 大丘頂
-            new THREE.Vector3(480, 20, -120),   // 下坡
-            new THREE.Vector3(400, 5, -250),    // 長彎道
+            // Roller Coaster steep climb and loop-like track
+            new THREE.Vector3(450, 60, 150),    // 急速爬升 (Roller Coaster)
+            new THREE.Vector3(500, 150, 0),     // 極高的高架橋
+            new THREE.Vector3(300, 120, -120),  // 仍在空中盤旋
+            new THREE.Vector3(200, 40, -200),   // 急速下坡
             new THREE.Vector3(250, 0, -350),    // 谷底直道
             new THREE.Vector3(100, 8, -380),    // 上坡
             new THREE.Vector3(-30, 20, -330),   // 丘陵彎
             new THREE.Vector3(-120, 10, -230),  // 下坡彎
-            new THREE.Vector3(-200, 25, -180),  // 高丘
-            new THREE.Vector3(-300, 5, -100),   // 下降
-            new THREE.Vector3(-450, 20, 0),     // 大彎道丘
-            new THREE.Vector3(-400, 8, 130),    // 彎道出口
-            new THREE.Vector3(-330, 15, 220),   // 緩上坡
+            // 隧道位置
+            new THREE.Vector3(-200, 5, -180),   // 將要進入隧道
+            new THREE.Vector3(-300, 5, -100),   // 隧道中
+            new THREE.Vector3(-450, 5, 0),      // 隧道中
+            new THREE.Vector3(-400, 8, 130),    // 出隧道
             // ===== 跳台區段 =====
             new THREE.Vector3(-250, 3, 320),    // 接近
             new THREE.Vector3(-200, 5, 335),    // 仍然低
@@ -631,8 +651,8 @@ class RacingGame {
                     // 尖銳三角形凸起
                     const factor = 1.0 - (dist / bump.width);
                     const bumpH = bump.height * factor;
-                    const bLeftIdx = i * 2;
-                    const bRightIdx = i * 2 + 1;
+                    let bLeftIdx = i * 2;
+                    let bRightIdx = i * 2 + 1;
                     vertices[bLeftIdx * 3 + 1] += bumpH;
                     vertices[bRightIdx * 3 + 1] += bumpH;
                 }
@@ -668,6 +688,77 @@ class RacingGame {
 
         // 3. 獲取 Raycast 用的 Mesh
         this.collidableMeshes = [this.trackMesh];
+
+        // ============ 建立隧道 ============
+        // 假設賽道的 65% 到 75% 之間是隧道
+        const tunnelStartIndex = Math.floor(curvePoints.length * 0.65);
+        const tunnelEndIndex = Math.floor(curvePoints.length * 0.75);
+
+        const tunnelGeo = new THREE.BufferGeometry();
+        const tVerts = [];
+        const tIndices = [];
+        const tUvs = [];
+        const tNormals = [];
+
+        const tunnelRadius = trackWidth * 0.75;
+        const archSegments = 16;
+
+        for (let i = tunnelStartIndex; i <= tunnelEndIndex; i++) {
+            const layout = this.trackLayout[i];
+            if (!layout) continue;
+            const p = layout.position;
+            const b = layout.binormal.clone().normalize();
+
+            for (let a = 0; a <= archSegments; a++) {
+                const angle = Math.PI * (a / archSegments);
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+
+                // Position around the curve point
+                const archX = p.x - b.x * cosA * tunnelRadius;
+                const archY = Math.max(p.y, p.y + sinA * tunnelRadius * 0.7 - 2);
+                const archZ = p.z - b.z * cosA * tunnelRadius;
+
+                tVerts.push(archX, archY, archZ);
+
+                // Normal
+                const nx = -b.x * cosA;
+                const ny = sinA;
+                const nz = -b.z * cosA;
+                tNormals.push(nx, ny, nz);
+
+                tUvs.push(i % 2, a / archSegments);
+            }
+        }
+
+        const rings = tunnelEndIndex - tunnelStartIndex;
+        for (let i = 0; i < rings; i++) {
+            for (let a = 0; a < archSegments; a++) {
+                const base = i * (archSegments + 1) + a;
+                const nextRow = base + (archSegments + 1);
+
+                // Inside triangles (Counter-clockwise considering we want to see inside)
+                tIndices.push(base, nextRow, base + 1);
+                tIndices.push(base + 1, nextRow, nextRow + 1);
+            }
+        }
+
+        tunnelGeo.setAttribute('position', new THREE.Float32BufferAttribute(tVerts, 3));
+        tunnelGeo.setAttribute('normal', new THREE.Float32BufferAttribute(tNormals, 3));
+        tunnelGeo.setAttribute('uv', new THREE.Float32BufferAttribute(tUvs, 2));
+        tunnelGeo.setIndex(tIndices);
+
+        // 隧道外牆加上簡單的水泥材質
+        const tunnelMat = new THREE.MeshStandardMaterial({
+            color: 0x444455,
+            metalness: 0.1,
+            roughness: 0.9,
+            side: THREE.DoubleSide
+        });
+        const tunnelMesh = new THREE.Mesh(tunnelGeo, tunnelMat);
+        tunnelMesh.castShadow = true;
+        tunnelMesh.receiveShadow = true;
+        this.scene.add(tunnelMesh);
 
         // 4. 裝飾 - 創建超大護欄與標誌
         this.createTrackBorders();
@@ -1330,70 +1421,88 @@ class RacingGame {
             roughness: 0.1
         });
 
-        // 主車身 - 使用 6 面材質，頂面和側面貼上圖片
-        const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 4.5);
+        // 主車身 - 卡丁車造型 (Taller Kart)
+        const bodyGeo = new THREE.BoxGeometry(1.4, 0.5, 3.5);
 
         // 車身貼圖材質
         const carPicMat = new THREE.MeshStandardMaterial({
             map: carPicTexture,
-            metalness: 0.7,
-            roughness: 0.2
+            metalness: 0.6,
+            roughness: 0.3
         });
 
         // BoxGeometry 6個面的順序: +X, -X, +Y, -Y, +Z, -Z
-        // 右側, 左側, 頂面, 底面, 前面, 後面
         const bodyMaterials = [
             carPicMat,      // 右側 (+X)
             carPicMat,      // 左側 (-X)
-            carPicMat,      // 頂面 (+Y) - 引擎蓋
+            carPicMat,      // 頂面 (+Y)
             bodyMaterial,   // 底面 (-Y)
             bodyMaterial,   // 前面 (+Z)
             carPicMat       // 後面 (-Z)
         ];
         const body = new THREE.Mesh(bodyGeo, bodyMaterials);
-        body.position.y = 0.6;
+        body.position.y = 0.6; // 較高底盤
         body.castShadow = true;
         this.car.add(body);
 
-        // 車頂/座艙
-        const cabinGeo = new THREE.BoxGeometry(1.8, 0.6, 2);
-        const cabinMat = new THREE.MeshStandardMaterial({
-            color: 0x111122,
-            metalness: 0.9,
-            roughness: 0.1
-        });
-        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-        cabin.position.set(0, 1.1, -0.3);
-        cabin.castShadow = true;
-        this.car.add(cabin);
+        // 側裙 (Side Pods)
+        const sidePodGeo = new THREE.BoxGeometry(2.4, 0.4, 1.8);
+        const sidePod = new THREE.Mesh(sidePodGeo, bodyMaterial);
+        sidePod.position.set(0, 0.6, 0.2);
+        sidePod.castShadow = true;
+        this.car.add(sidePod);
 
-        // 前擋風玻璃
-        const windshieldGeo = new THREE.BoxGeometry(1.7, 0.5, 0.1);
-        const windshieldMat = new THREE.MeshStandardMaterial({
-            color: 0x88ccff,
-            metalness: 0.1,
-            roughness: 0.1,
-            transparent: true,
-            opacity: 0.5
-        });
-        const windshield = new THREE.Mesh(windshieldGeo, windshieldMat);
-        windshield.position.set(0, 1.1, 0.7);
-        windshield.rotation.x = 0.3;
-        this.car.add(windshield);
+        // 駕駛座靠背 (Taller Seat)
+        const seatGeo = new THREE.BoxGeometry(1.0, 1.4, 0.6);
+        const seatMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const seat = new THREE.Mesh(seatGeo, seatMat);
+        seat.position.set(0, 1.3, -0.6);
+        seat.castShadow = true;
+        this.car.add(seat);
 
-        // 車輪 - Bigger and wider for better grip look
+        // 卡丁車前鼻翼 (Front Nose)
+        const noseGeo = new THREE.BoxGeometry(1.2, 0.3, 1.5);
+        const nose = new THREE.Mesh(noseGeo, carPicMat);
+        nose.position.set(0, 0.5, 2.0);
+        nose.rotation.x = 0.3; // 向下傾斜
+        nose.castShadow = true;
+        this.car.add(nose);
+
+        // 後置引擎部
+        const engineGeo = new THREE.BoxGeometry(1.2, 0.8, 1.0);
+        const engineMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8 });
+        const engine = new THREE.Mesh(engineGeo, engineMat);
+        engine.position.set(0, 0.9, -1.8);
+        engine.castShadow = true;
+        this.car.add(engine);
+
+        // 卡丁車排氣管 (Exhaust Pipes)
+        const pipeGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.2, 16);
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 1.0 });
+        const pipeL = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeL.rotation.x = Math.PI / 2 + 0.3;
+        pipeL.position.set(-0.4, 1.3, -2.4);
+
+        const pipeR = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeR.rotation.x = Math.PI / 2 + 0.3;
+        pipeR.position.set(0.4, 1.3, -2.4);
+        this.car.add(pipeL);
+        this.car.add(pipeR);
+
+        // 車輪 - Bigger and wider
         this.wheels = [];
-        const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 24);
+        const wheelGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.55, 32);
         const wheelMat = new THREE.MeshStandardMaterial({
             color: 0x222222,
-            roughness: 0.6
+            roughness: 0.8,
+            metalness: 0.2
         });
 
         const wheelPositions = [
-            { x: -1.2, y: 0.55, z: 1.3 },   // 前左
-            { x: 1.2, y: 0.55, z: 1.3 },    // 前右
-            { x: -1.2, y: 0.55, z: -1.3 },  // 後左
-            { x: 1.2, y: 0.55, z: -1.3 }    // 後右
+            { x: -1.3, y: 0.65, z: 1.5 },   // 前左
+            { x: 1.3, y: 0.65, z: 1.5 },    // 前右
+            { x: -1.3, y: 0.65, z: -1.5 },  // 後左
+            { x: 1.3, y: 0.65, z: -1.5 }    // 後右
         ];
 
         wheelPositions.forEach(pos => {
@@ -1410,11 +1519,11 @@ class RacingGame {
         const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
         const leftTail = new THREE.Mesh(tailLightGeo, tailLightMat);
-        leftTail.position.set(-0.7, 0.6, -2.3);
+        leftTail.position.set(-0.8, 0.6, -2.55);
         this.car.add(leftTail);
 
         const rightTail = new THREE.Mesh(tailLightGeo, tailLightMat);
-        rightTail.position.set(0.7, 0.6, -2.3);
+        rightTail.position.set(0.8, 0.6, -2.55);
         this.car.add(rightTail);
 
         // 頭燈
@@ -1422,11 +1531,11 @@ class RacingGame {
         const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffcc });
 
         const leftHead = new THREE.Mesh(headLightGeo, headLightMat);
-        leftHead.position.set(-0.7, 0.6, 2.3);
+        leftHead.position.set(-0.8, 0.6, 2.55);
         this.car.add(leftHead);
 
         const rightHead = new THREE.Mesh(headLightGeo, headLightMat);
-        rightHead.position.set(0.7, 0.6, 2.3);
+        rightHead.position.set(0.8, 0.6, 2.55);
         this.car.add(rightHead);
 
         // 霓虹底盤燈
@@ -2367,20 +2476,22 @@ class RacingGame {
         const cameraDistance = 12;
         const cameraHeight = 6;
 
-        const idealX = this.car.position.x - Math.sin(this.carAngle) * cameraDistance;
-        const idealZ = this.car.position.z - Math.cos(this.carAngle) * cameraDistance;
-        const idealY = this.car.position.y + cameraHeight;
+        // Ensure car's world matrix is up to date this frame
+        this.car.updateMatrixWorld(true);
 
-        this.camera.position.x += (idealX - this.camera.position.x) * 0.1;
-        this.camera.position.z += (idealZ - this.camera.position.z) * 0.1;
-        this.camera.position.y += (idealY - this.camera.position.y) * 0.1;
+        // Define offset relative to the car (Local Space)
+        // Local +Z is forward, +Y is up. So behind is -Z.
+        const localOffset = new THREE.Vector3(0, cameraHeight, -cameraDistance);
+        const idealPos = localOffset.applyMatrix4(this.car.matrixWorld);
 
-        const lookAtPoint = new THREE.Vector3(
-            this.car.position.x + Math.sin(this.carAngle) * 5,
-            this.car.position.y + 1,
-            this.car.position.z + Math.cos(this.carAngle) * 5
-        );
-        this.camera.lookAt(lookAtPoint);
+        // Smoothly interpolate camera position
+        this.camera.position.lerp(idealPos, 0.1);
+
+        // Define look target relative to the car
+        const localLookTarget = new THREE.Vector3(0, 1.5, 10); // slightly up & ahead
+        const idealLookAt = localLookTarget.applyMatrix4(this.car.matrixWorld);
+
+        this.camera.lookAt(idealLookAt);
     }
 
     updateHUD(dt) {
@@ -2432,7 +2543,7 @@ class RacingGame {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.85);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -2446,11 +2557,44 @@ class RacingGame {
         title.textContent = 'FINISHED!';
         title.style.fontSize = '80px';
         title.style.textShadow = '0 0 20px #00ff88';
+        title.style.marginBottom = '20px';
+
+        const finalRank = this.rankElement ? parseInt(this.rankElement.textContent) : 1;
+        const totalCars = (this.bots ? this.bots.length : 10) + 1;
+
+        let messageWord = '';
+        let rankColor = '#ffffff';
+        if (finalRank === 1) {
+            messageWord = 'YOU ARE A RACING LEGEND! 🏆';
+            rankColor = '#ffd700'; // Gold
+        } else if (finalRank <= 3) {
+            messageWord = 'GREAT JOB! PODIUM FINISH! 🥈🥉';
+            rankColor = '#c0c0c0';
+        } else if (finalRank <= totalCars / 2) {
+            messageWord = 'NOT BAD! KEEP PUSHING! 🏎️💨';
+            rankColor = '#ffffff';
+        } else {
+            messageWord = "DON'T GIVE UP! TRY AGAIN! 💪";
+            rankColor = '#ff5555';
+        }
+
+        const rankDisplay = document.createElement('h2');
+        rankDisplay.innerHTML = `Rank: <span style="color: ${rankColor}; font-size: 1.5em">${finalRank}</span> / ${totalCars}`;
+        rankDisplay.style.color = '#ffffff';
+        rankDisplay.style.marginTop = '10px';
+        rankDisplay.style.fontSize = '40px';
+
+        const msgDisplay = document.createElement('h3');
+        msgDisplay.textContent = messageWord;
+        msgDisplay.style.color = rankColor;
+        msgDisplay.style.marginTop = '20px';
+        msgDisplay.style.fontSize = '30px';
+        msgDisplay.style.textShadow = `0 0 10px ${rankColor}`;
 
         const time = document.createElement('h2');
-        time.textContent = `Time: ${this.timeElement.textContent}`;
-        time.style.color = '#ffffff';
-        time.style.marginTop = '20px';
+        time.textContent = `Total Time: ${this.timeElement.textContent}`;
+        time.style.color = '#aaaaaa';
+        time.style.marginTop = '30px';
 
         const btn = document.createElement('button');
         btn.textContent = 'Play Again';
@@ -2464,10 +2608,21 @@ class RacingGame {
             border-radius: 30px;
             cursor: pointer;
             font-weight: bold;
+            transition: transform 0.2s, background 0.2s;
         `;
+        btn.onmouseover = () => {
+            btn.style.transform = 'scale(1.1)';
+            btn.style.background = '#00cc66';
+        };
+        btn.onmouseout = () => {
+            btn.style.transform = 'scale(1)';
+            btn.style.background = '#00ff88';
+        };
         btn.onclick = () => location.reload();
 
         overlay.appendChild(title);
+        overlay.appendChild(rankDisplay);
+        overlay.appendChild(msgDisplay);
         overlay.appendChild(time);
         overlay.appendChild(btn);
         document.body.appendChild(overlay);
