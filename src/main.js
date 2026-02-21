@@ -2984,7 +2984,7 @@ class RacingGame {
         });
 
         // 隨機產生爆炸 (Bombing)
-        if (Math.random() < 0.08) { // 每幀 8% 機率爆炸
+        if (Math.random() < 0.015) { // 每幀 1.5% 機率爆炸
             const explGroup = new THREE.Group();
 
             // 爆炸核心
