@@ -776,6 +776,9 @@ class RacingGame {
 
         // 7. 初始化 Minimap
         this.initMinimap();
+
+        // 8. 戰爭背景與 SpaceX 火箭
+        this.createWarzoneAndSpaceX();
     }
 
 
@@ -898,7 +901,7 @@ class RacingGame {
     createTrackBorders() {
         if (!this.trackLayout) return;
 
-        const barrierHeight = 12; // 護欄高度
+        const barrierHeight = 4; // 護欄高度
         const halfWidth = this.trackWidth / 2 + 1.5;
 
         // 預計算所有材質的寬高比
@@ -2763,6 +2766,7 @@ class RacingGame {
             this.updateCar(dt);
             this.checkCollisions(); // 檢測碰撞
             this.updateCamera();
+            this.updateWarzoneAndSpaceX(dt);
 
             // Rotate sky banners
             if (this.skyBannerGroup) {
@@ -2808,6 +2812,218 @@ class RacingGame {
         this.updateMinimap(); // 更新小地圖顯示所有車輛
         this.updateHUD(dt);
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // ==================== 戰爭環境與 SpaceX 火箭 ====================
+    createWarzoneAndSpaceX() {
+        this.warObjects = [];
+        this.explosions = [];
+
+        // 1. SpaceX 火箭
+        for (let i = 0; i < 5; i++) {
+            const group = new THREE.Group();
+
+            // 身體
+            const bodyGeo = new THREE.CylinderGeometry(2, 2, 20, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+
+            // 頂部圓錐
+            const coneGeo = new THREE.ConeGeometry(2, 6, 16);
+            const coneMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            cone.position.y = 13;
+
+            // 噴火特效
+            const flameGeo = new THREE.ConeGeometry(1.5, 8, 8);
+            const flameMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+            const flame = new THREE.Mesh(flameGeo, flameMat);
+            flame.position.y = -14;
+            flame.rotation.x = Math.PI;
+
+            group.add(body, cone, flame);
+
+            // 隨機初始位置
+            group.position.set(
+                (Math.random() - 0.5) * 800,
+                Math.random() * 200,
+                (Math.random() - 0.5) * 800
+            );
+
+            group.userData = {
+                type: 'rocket',
+                speedY: 30 + Math.random() * 60,
+                flame: flame
+            };
+
+            this.scene.add(group);
+            this.warObjects.push(group);
+        }
+
+        // 2. 飛機
+        for (let i = 0; i < 10; i++) {
+            const group = new THREE.Group();
+
+            const bodyGeo = new THREE.CylinderGeometry(1.5, 1.5, 15, 8);
+            bodyGeo.rotateX(Math.PI / 2);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6 });
+            const body = new THREE.Mesh(bodyGeo, mat);
+
+            const wingGeo = new THREE.BoxGeometry(20, 0.5, 4);
+            const wing = new THREE.Mesh(wingGeo, mat);
+            wing.position.set(0, 0, 1);
+
+            const tailGeo = new THREE.BoxGeometry(6, 4, 3);
+            const tail = new THREE.Mesh(tailGeo, mat);
+            tail.position.set(0, 1, -6);
+
+            group.add(body, wing, tail);
+
+            group.position.set(
+                (Math.random() - 0.5) * 1200,
+                80 + Math.random() * 150,
+                (Math.random() - 0.5) * 1200
+            );
+
+            const dir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+            group.lookAt(group.position.clone().add(dir));
+
+            group.userData = {
+                type: 'plane',
+                dir: dir,
+                speed: 100 + Math.random() * 100
+            };
+
+            this.scene.add(group);
+            this.warObjects.push(group);
+        }
+
+        // 3. 戰車
+        for (let i = 0; i < 25; i++) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x4a5d23 }); // 軍綠色
+
+            const baseGeo = new THREE.BoxGeometry(6, 2, 8);
+            const base = new THREE.Mesh(baseGeo, mat);
+            base.position.y = 1;
+
+            const turretGeo = new THREE.BoxGeometry(4, 1.5, 4);
+            const turret = new THREE.Mesh(turretGeo, mat);
+            turret.position.y = 2.75;
+
+            const barrelGeo = new THREE.CylinderGeometry(0.3, 0.3, 6);
+            barrelGeo.rotateX(Math.PI / 2);
+            const barrel = new THREE.Mesh(barrelGeo, mat);
+            barrel.position.set(0, 2.75, 4.5);
+
+            group.add(base, turret, barrel);
+
+            const rad = 250 + Math.random() * 400;
+            const ang = Math.random() * Math.PI * 2;
+            group.position.set(Math.cos(ang) * rad, 0, Math.sin(ang) * rad);
+            group.rotation.y = Math.random() * Math.PI * 2;
+
+            this.scene.add(group);
+        }
+
+        // 4. 士兵
+        for (let i = 0; i < 60; i++) {
+            const group = new THREE.Group();
+            const skinGeo = new THREE.SphereGeometry(0.4);
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+            const head = new THREE.Mesh(skinGeo, skinMat);
+            head.position.y = 2.2;
+
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4a5d23 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.9;
+
+            group.add(head, body);
+
+            const rad = 200 + Math.random() * 450;
+            const ang = Math.random() * Math.PI * 2;
+            group.position.set(Math.cos(ang) * rad, 0, Math.sin(ang) * rad);
+            group.rotation.y = Math.random() * Math.PI * 2;
+
+            this.scene.add(group);
+        }
+    }
+
+    updateWarzoneAndSpaceX(dt) {
+        if (!this.warObjects) return;
+
+        const time = Date.now() * 0.001;
+
+        // 更新飛行物體
+        this.warObjects.forEach(obj => {
+            const ud = obj.userData;
+            if (ud.type === 'rocket') {
+                obj.position.y += ud.speedY * dt;
+
+                // 火焰跳動
+                const scale = 1 + Math.sin(time * 20 + obj.position.y) * 0.3;
+                ud.flame.scale.set(scale, scale, scale);
+
+                // 飛太高就重置
+                if (obj.position.y > 1000) {
+                    obj.position.y = 0;
+                    obj.position.x = (Math.random() - 0.5) * 800;
+                    obj.position.z = (Math.random() - 0.5) * 800;
+                }
+            } else if (ud.type === 'plane') {
+                obj.position.addScaledVector(ud.dir, ud.speed * dt);
+
+                // 飛出界就重置
+                if (Math.abs(obj.position.x) > 1200 || Math.abs(obj.position.z) > 1200) {
+                    obj.position.set((Math.random() - 0.5) * 1200, 80 + Math.random() * 150, (Math.random() - 0.5) * 1200);
+                    ud.dir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+                    obj.lookAt(obj.position.clone().add(ud.dir));
+                }
+            }
+        });
+
+        // 隨機產生爆炸 (Bombing)
+        if (Math.random() < 0.08) { // 每幀 8% 機率爆炸
+            const explGroup = new THREE.Group();
+
+            // 爆炸核心
+            const eGeo = new THREE.SphereGeometry(2, 8, 8);
+            const eMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 1 });
+            const eMesh = new THREE.Mesh(eGeo, eMat);
+            explGroup.add(eMesh);
+
+            // 隨機在周圍爆炸
+            const rad = 100 + Math.random() * 500;
+            const ang = Math.random() * Math.PI * 2;
+            explGroup.position.set(Math.cos(ang) * rad, Math.random() * 30, Math.sin(ang) * rad);
+
+            this.scene.add(explGroup);
+            this.explosions.push({ mesh: explGroup, mat: eMat, age: 0, maxAge: 0.5 + Math.random() * 0.5 });
+        }
+
+        // 更新爆炸特效
+        for (let i = this.explosions.length - 1; i >= 0; i--) {
+            const exp = this.explosions[i];
+            exp.age += dt;
+            const ratio = exp.age / exp.maxAge;
+
+            if (ratio >= 1) {
+                this.scene.remove(exp.mesh);
+                exp.mat.dispose();
+                exp.mesh.children[0].geometry.dispose();
+                this.explosions.splice(i, 1);
+            } else {
+                const scale = 1 + ratio * 20; // 快速膨脹
+                exp.mesh.scale.set(scale, scale, scale);
+                exp.mat.opacity = 1 - ratio; // 淡出
+
+                // 後期變成灰色煙霧
+                if (ratio > 0.4) {
+                    exp.mat.color.setHex(0x555555);
+                }
+            }
+        }
     }
 }
 
