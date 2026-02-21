@@ -1010,13 +1010,15 @@ class RacingGame {
 
         line.position.copy(pt);
         line.position.y += 0.3;
-        // 面向切線 (平面默認面向Z，旋轉90度變平)
-        line.rotation.x = -Math.PI / 2;
-        // Z 旋轉對齊跑道 - 旋轉 90 度 (Math.PI/2)
+        
+        // Z 旋轉對齊跑道，然後 X 旋轉讓其平放
+        // 我們使用 Quaternion 來進行精確的旋轉疊加
         const angle = Math.atan2(tangent.x, tangent.z);
-        // Previously: line.rotation.z = -angle + Math.PI/2;
-        // Requested rotate 90 degree again:
-        line.rotation.z = -angle;
+        const qAngle = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+        const qFlat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+        
+        // 將兩者結合，先平面旋轉再貼地
+        line.quaternion.multiplyQuaternions(qAngle, qFlat);
 
         this.scene.add(line);
     }
@@ -1722,9 +1724,21 @@ class RacingGame {
 
         ctx.stroke();
 
-        // Draw Car
+        // Draw Bots
+        if (this.bots) {
+            ctx.fillStyle = '#1E88E5'; // 藍色代表其他車輛
+            this.bots.forEach(bot => {
+                if (!bot.mesh) return;
+                const bPos = bot.mesh.position;
+                ctx.beginPath();
+                ctx.arc(cx + bPos.x * scale, cy + bPos.z * scale, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Draw Player Car On Top
         const carPos = this.car.position;
-        ctx.fillStyle = '#E31E26';
+        ctx.fillStyle = '#E31E26'; // 紅色代表玩家
         ctx.beginPath();
         ctx.arc(cx + carPos.x * scale, cy + carPos.z * scale, 4, 0, Math.PI * 2);
         ctx.fill();
@@ -2593,6 +2607,7 @@ class RacingGame {
             });
         }
 
+        this.updateMinimap(); // 更新小地圖顯示所有車輛
         this.updateHUD(dt);
         this.renderer.render(this.scene, this.camera);
     }
