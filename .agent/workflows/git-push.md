@@ -4,22 +4,25 @@ description: Commit and push all changes to GitHub
 
 // turbo-all
 
-1. Check git status to see what files have changed
+1. Check git status
 ```
 git status
 ```
 
-2. Stage all modified and new files
+// turbo
+2. Stage all files
 ```
 git add -A
 ```
 
-3. Commit with a descriptive message summarizing recent changes
+// turbo
+3. Commit with a message
 ```
 git commit -m "chore: auto-commit latest changes"
 ```
 
-4. Push to remote origin main branch
+// turbo
+4. Push to GitHub
 ```
 git push origin main
 ```
